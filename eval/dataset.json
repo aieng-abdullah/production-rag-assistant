@@ -1,0 +1,39 @@
+{
+  "description": "RAG evaluation dataset - 15 question/answer pairs for testing",
+  "version": "1.0",
+  "samples": [
+    {
+      "question": "What is the main contribution of the research?",
+      "ground_truth": "The paper introduces a novel hybrid retrieval system combining BM25 and vector search.",
+      "doc_id": "test_doc_1"
+    },
+    {
+      "question": "What dataset was used for evaluation?",
+      "ground_truth": "The authors evaluated on the MS MARCO passage ranking dataset.",
+      "doc_id": "test_doc_1"
+    },
+    {
+      "question": "What is the reported accuracy improvement?",
+      "ground_truth": "The proposed method achieved 15% improvement over the baseline.",
+      "doc_id": "test_doc_1"
+    },
+    {
+      "question": "How does the cross-encoder reranker work?",
+      "ground_truth": "The cross-encoder scores query-chunk pairs using a transformer model.",
+      "doc_id": "test_doc_2"
+    },
+    {
+      "question": "What is the latency of the retrieval pipeline?",
+      "ground_truth": "End-to-end latency is approximately 500ms for 1000 chunks.",
+      "doc_id": "test_doc_2"
+    }
+  ],
+  "metadata": {
+    "total_samples": 5,
+    "created_date": "2025-01-01",
+    "thresholds": {
+      "faithfulness": 0.80,
+      "answer_relevancy": 0.80
+    }
+  }
+}

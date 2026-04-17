@@ -1,11 +1,13 @@
-cat <<EOL > .gitignore
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .env
-.venv
+.venv/
+venv/
+env/
+ENV/
 
 # Data
 data/chroma/
@@ -21,4 +23,11 @@ Thumbs.db
 
 # Streamlit secrets
 .streamlit/secrets.toml
-EOL
+
+# IDE
+.vscode/
+.idea/
+.windsurf/
+
+# ChromaDB persistence
+chroma_data/
