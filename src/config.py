@@ -21,14 +21,22 @@ class Config:
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
     COLLECTION_NAME = "research_docs"
     
-    # LLM settings (OpenAI for generation)
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    # Groq LLM settings (fast, free tier available)
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "gpt-oss-120b")  # or: llama-3.3-70b-versatile, mixtral-8x7b-32768
+    
+    # Active LLM model
+    LLM_MODEL = GROQ_MODEL
     
     # LangSmith settings
     LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
     LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "rag-research-assistant")
+    
+    # Langfuse settings (open-source alternative to LangSmith)
+    LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")  # or self-hosted URL
     
     # Retrieval settings
     CHUNK_SIZE = 512

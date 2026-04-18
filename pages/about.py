@@ -15,9 +15,9 @@ def render_about():
     ### Architecture
     
     ```
-    PDF → PyMuPDF → Chunker → OpenAI Embeddings → ChromaDB
+    PDF → PyMuPDF → Chunker → Sentence Transformers → ChromaDB
                                               ↓
-    Query → BM25 Search ─┬─→ RRF Fusion → Cross-Encoder Rerank → GPT-4o → Cited Answer
+    Query → BM25 Search ─┬─→ RRF Fusion → Cross-Encoder Rerank → Groq LLM → Cited Answer
              Vector Search ─┘
     ```
     
@@ -46,11 +46,11 @@ def render_about():
     - **Frontend**: Streamlit
     - **Backend**: Python + FastAPI (optional)
     - **Vector DB**: ChromaDB
-    - **Embeddings**: OpenAI text-embedding-3-small
-    - **LLM**: OpenAI GPT-4o / GPT-4o-mini
+    - **Embeddings**: sentence-transformers/all-MiniLM-L6-v2 (local, free)
+    - **LLM**: Groq GPT-OSS-120B / Llama-3.3-70B (fast, free tier)
     - **Reranker**: cross-encoder/ms-marco-MiniLM-L-6-v2
     - **Evaluation**: Ragas + Pytest
-    - **Observability**: LangSmith + Loguru
+    - **Observability**: Langfuse + Loguru
     
     ### Links
     

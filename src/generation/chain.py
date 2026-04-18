@@ -1,8 +1,8 @@
-"""Generation chain with LangSmith tracing."""
+"""Generation chain with LangSmith and Langfuse tracing."""
 
 import time
 from typing import List, Dict
-from openai import OpenAI
+from groq import Groq
 from langsmith import traceable
 
 from src.config import Config
@@ -11,12 +11,14 @@ from src.generation.output_models import CitedAnswer
 from src.generation.validator import validate_citations, extract_citations
 from src.monitoring.logger import get_logger
 from src.monitoring.rag_metrics import metrics_collector
+from src.monitoring.langfuse_tracer import langfuse, is_enabled
 from src.eval.live_ragas import live_evaluator
 
 logger = get_logger("generation")
 
-# Initialize OpenAI client
-client = OpenAI(api_key=Config.OPENAI_API_KEY)
+# Initialize Groq client
+client = Groq(api_key=Config.GROQ_API_KEY)
+logger.info(f"Using Groq with model: {Config.GROQ_MODEL}")
 
 
 @traceable(run_type="chain", name="rag_generate")
@@ -40,8 +42,23 @@ def generate(question: str, chunks: List[Dict], retrieval_metrics=None, run_raga
     
     logger.info(f"Generating answer for: '{question[:50]}...' with {len(chunks)} chunks")
     
+    # Start Langfuse trace if enabled
+    trace = None
+    if is_enabled():
+        trace = langfuse.trace(
+            name="generation",
+            input=question,
+            metadata={
+                "chunk_count": len(chunks),
+                "model": Config.LLM_MODEL,
+                "provider": "groq",
+                "temperature": 0.3
+            }
+        )
+    
     try:
         # Call LLM
+        llm_span = trace.span(name="llm_call") if trace else None
         response = client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
@@ -53,9 +70,25 @@ def generate(question: str, chunks: List[Dict], retrieval_metrics=None, run_raga
         
         raw_answer = response.choices[0].message.content
         
+        if llm_span:
+            llm_span.update(
+                output=raw_answer[:500],
+                usage={
+                    "input": response.usage.prompt_tokens,
+                    "output": response.usage.completion_tokens,
+                    "total": response.usage.total_tokens
+                }
+            )
+            llm_span.end()
+        
         # Validate citations
+        validation_span = trace.span(name="citation_validation") if trace else None
         max_index = len(chunks) - 1
         is_valid, _, citation_indices = validate_citations(raw_answer, max_index)
+        
+        if validation_span:
+            validation_span.update(metadata={"citations": citation_indices, "valid": is_valid})
+            validation_span.end()
         
         # Collect generation metrics
         gen_metrics = metrics_collector.collect_generation(
@@ -104,6 +137,17 @@ def generate(question: str, chunks: List[Dict], retrieval_metrics=None, run_raga
                 "ragas": ragas_scores
             }
         }
+        
+        # Finalize Langfuse trace
+        if trace:
+            trace.update(
+                output=raw_answer[:500],
+                metadata={
+                    "citations": citation_indices,
+                    "citation_count": len(citation_indices),
+                    "ragas_scores": ragas_scores
+                }
+            )
         
         logger.info(f"Generated answer with {len(citation_indices)} citations")
         return result

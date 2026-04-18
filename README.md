@@ -9,9 +9,9 @@ Production-grade Retrieval-Augmented Generation system for research documents.
 ## Architecture
 
 ```
-PDF → PyMuPDF → Chunker → OpenAI Embeddings → ChromaDB
+PDF → PyMuPDF → Chunker → Sentence Transformers → ChromaDB
                                           ↓
-Query → BM25 Search ─┬─→ RRF Fusion → Cross-Encoder Rerank → GPT-4o → Cited Answer
+Query → BM25 Search ─┬─→ RRF Fusion → Cross-Encoder Rerank → Groq LLM → Cited Answer
          Vector Search ─┘
 ```
 
@@ -21,7 +21,8 @@ Query → BM25 Search ─┬─→ RRF Fusion → Cross-Encoder Rerank → GPT-4
 2. **Cross-Encoder Reranking** - ms-marco-MiniLM for precision scoring
 3. **Citation Enforcement** - Every claim validated with [SOURCE N]
 4. **Live RAGAS Evaluation** - Quality metrics on every query
-5. **Full Observability** - LangSmith traces + structured logging
+5. **Full Observability** - Langfuse traces + structured logging
+6. **100% Free Tier** - No paid APIs required
 
 ## Quick Start
 
@@ -32,7 +33,7 @@ cd rag-research-assistant
 
 # 2. Setup environment
 cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
+# Edit .env with your GROQ_API_KEY (get free key at groq.com)
 
 # 3. Install dependencies
 pip install -r requirements.txt
@@ -83,21 +84,22 @@ Enable "Show retrieval debug" to see:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `LANGCHAIN_API_KEY` | No | LangSmith tracing |
-| `LANGCHAIN_TRACING_V2` | No | Enable tracing (true/false) |
+| `GROQ_API_KEY` | Yes | Groq API key (free tier at groq.com) |
+| `GROQ_MODEL` | No | Model: gpt-oss-120b, llama-3.3-70b-versatile |
+| `LANGFUSE_PUBLIC_KEY` | No | Langfuse tracing (open source) |
+| `LANGFUSE_SECRET_KEY` | No | Langfuse secret key |
 | `CHROMA_HOST` | No | Leave empty for local mode |
 | `LOG_LEVEL` | No | DEBUG, INFO, WARNING |
 
 ## Tech Stack
 
 - **Frontend**: Streamlit
-- **Embeddings**: OpenAI text-embedding-3-small
-- **LLM**: GPT-4o / GPT-4o-mini
+- **Embeddings**: sentence-transformers/all-MiniLM-L6-v2 (local, free)
+- **LLM**: Groq GPT-OSS-120B / Llama-3.3-70B (fast, free tier)
 - **Vector DB**: ChromaDB
 - **Reranker**: cross-encoder/ms-marco-MiniLM-L-6-v2
 - **Evaluation**: RAGAS
-- **Observability**: LangSmith + Loguru
+- **Observability**: Langfuse + Loguru (open source)
 
 ## Testing
 
@@ -167,5 +169,6 @@ MIT License - see LICENSE file
 ## Links
 
 - [Live Demo](https://yourapp.streamlit.app)
-- [LangSmith Project](https://smith.langchain.com)
+- [Langfuse Dashboard](https://cloud.langfuse.com)
+- [Groq Console](https://console.groq.com)
 - [GitHub Repo](https://github.com/yourname/rag-research-assistant)

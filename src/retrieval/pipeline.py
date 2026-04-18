@@ -11,6 +11,7 @@ from src.retrieval.hybrid_fusion import reciprocal_rank_fusion
 from src.retrieval.cross_encoder import rerank
 from src.monitoring.logger import get_logger
 from src.monitoring.rag_metrics import metrics_collector
+from src.monitoring.langfuse_tracer import langfuse, LangfuseSpan, is_enabled
 
 logger = get_logger("retrieval_pipeline")
 
@@ -44,26 +45,51 @@ def hybrid_search(
     
     logger.info(f"Hybrid search: '{query[:50]}...', doc_filter: {doc_id}")
     
+    # Start Langfuse trace if enabled
+    trace = None
+    if is_enabled():
+        trace = langfuse.trace(
+            name="retrieval_pipeline",
+            input={"query": query, "doc_filter": doc_id},
+            metadata={"top_k": top_k}
+        )
+    
     # Step 1: Vector search
+    vector_span = trace.span(name="vector_search", metadata={"top_k": Config.TOP_K_VECTOR}) if trace else None
     vector_results = vector_search(
         query, 
         top_k=Config.TOP_K_VECTOR, 
         doc_id=doc_id
     )
+    if vector_span:
+        vector_span.update(metadata={"results": len(vector_results)})
+        vector_span.end()
     
     # Step 2: BM25 search
+    bm25_span = trace.span(name="bm25_search", metadata={"top_k": Config.TOP_K_BM25}) if trace else None
     bm25_index = BM25Index()
     bm25_index.build(doc_id=doc_id)
     bm25_results = bm25_index.search(query, top_k=Config.TOP_K_BM25)
+    if bm25_span:
+        bm25_span.update(metadata={"results": len(bm25_results)})
+        bm25_span.end()
     
     # Step 3: RRF fusion
+    fusion_span = trace.span(name="rrf_fusion") if trace else None
     fused_results = reciprocal_rank_fusion(vector_results, bm25_results)
+    if fusion_span:
+        fusion_span.update(metadata={"fused_count": len(fused_results)})
+        fusion_span.end()
     
     # Take top fused results for reranking
     fused_top_ids = [chunk_id for chunk_id, _ in fused_results[:Config.TOP_K_VECTOR]]
     
     # Step 4: Fetch chunk contents
+    fetch_span = trace.span(name="fetch_chunks") if trace else None
     chunks = fetch_chunks(fused_top_ids)
+    if fetch_span:
+        fetch_span.update(metadata={"fetched": len(chunks)})
+        fetch_span.end()
     
     # Attach fusion scores for debug
     fusion_score_map = dict(fused_results)
@@ -71,7 +97,11 @@ def hybrid_search(
         chunk["rrf_score"] = fusion_score_map.get(chunk["id"], 0)
     
     # Step 5: Cross-encoder reranking
+    rerank_span = trace.span(name="cross_encoder_rerank", metadata={"top_n": top_k}) if trace else None
     reranked = rerank(query, chunks, top_n=top_k)
+    if rerank_span:
+        rerank_span.update(metadata={"reranked": len(reranked)})
+        rerank_span.end()
     
     # Collect metrics
     retrieval_metrics = None
@@ -98,6 +128,17 @@ def hybrid_search(
             "bm25_scores": {cid: score for cid, score in bm25_results[:10]},
             "retrieval_metrics": retrieval_metrics.__dict__ if retrieval_metrics else None
         }
+    
+    # Finalize Langfuse trace
+    if trace:
+        trace.update(
+            output={"retrieved_chunks": len(reranked)},
+            metadata={
+                "vector_hits": len(vector_results),
+                "bm25_hits": len(bm25_results),
+                "final_chunks": len(reranked)
+            }
+        )
     
     logger.info(f"Retrieval complete: {len(reranked)} final chunks")
     return reranked, debug

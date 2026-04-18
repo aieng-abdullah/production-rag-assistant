@@ -8,9 +8,9 @@ chromadb>=0.5.0
 rank-bm25>=0.2.2
 
 # LLM & Embeddings
-openai>=1.55.0
+groq>=0.9.0
 langchain>=0.3.0
-langchain-openai>=0.2.0
+langchain-groq>=0.2.0
 sentence-transformers>=3.3.0
 
 # Evaluation
@@ -19,6 +19,7 @@ ragas>=0.1.0
 # Monitoring & Logging
 loguru>=0.7.0
 langsmith>=0.1.0
+langfuse>=2.0.0
 
 # PDF Processing
 pymupdf>=1.25.0
