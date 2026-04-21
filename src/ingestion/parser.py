@@ -1,47 +1,43 @@
-"""PDF text extraction with PyMuPDF."""
-
-import fitz  # PyMuPDF
 from pathlib import Path
-from typing import List, Dict
+from typing import Optional
+import fitz
+from loguru import logger
 
-from src.monitoring.logger import get_logger
-
-logger = get_logger("parser")
+MIN_PAGE_CHARS = 100
 
 
-def parse_pdf(file_path: str | Path) -> List[Dict]:
-    """Extract text from PDF preserving page numbers and metadata."""
-    file_path = Path(file_path)
-    
-    # Validate file exists
-    if not file_path.exists():
-        logger.error(f"PDF not found: {file_path}")
-        raise FileNotFoundError(f"PDF not found: {file_path}")
-    
+def extract_pages(pdf_path: str, doc_id: Optional[str] = None) -> list[dict]:
+    path = Path(pdf_path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+    resolved_doc_id = doc_id or path.stem
+    doc = fitz.open(str(path))
+    total_pages = len(doc)
+
+    logger.info(f"Parsing '{resolved_doc_id}' — {total_pages} pages")
+
     pages = []
-    
-    try:
-        # Open PDF document
-        with fitz.open(str(file_path)) as doc:
-            logger.info(f"Parsing PDF: {file_path.name}, pages: {len(doc)}")
-            
-            for page_num, page in enumerate(doc, start=1):
-                # Extract text from page
-                text = page.get_text().strip()
-                
-                # Skip empty pages
-                if not text:
-                    continue
-                
-                pages.append({
-                    "page_num": page_num,
-                    "text": text,
-                    "char_count": len(text)
-                })
-        
-        logger.info(f"Extracted {len(pages)} non-empty pages")
-        return pages
-        
-    except Exception as e:
-        logger.error(f"Failed to parse PDF: {e}")
-        raise ValueError(f"PDF parsing failed: {e}")
+    skipped = 0
+
+    for page_num, page in enumerate(doc, start=1):
+        text = page.get_text("text").strip()
+
+        if len(text) < MIN_PAGE_CHARS:
+            skipped += 1
+            continue
+
+        pages.append(
+            {
+                "text": text,
+                "page_num": page_num,
+                "doc_id": resolved_doc_id,
+                "source": str(path),
+                "total_pages": total_pages,
+            }
+        )
+
+    doc.close()
+    logger.info(f"Extracted {len(pages)} pages ({skipped} skipped)")
+    return pages

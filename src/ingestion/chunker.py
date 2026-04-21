@@ -1,44 +1,60 @@
-"""Text chunking with recursive character splitter."""
+"""
+Document chunking with metadata preservation.
+"""
 
 from typing import List, Dict
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import Config
-from src.monitoring.logger import get_logger
 
-logger = get_logger("chunker")
+_text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=Config.CHUNK_SIZE,
+    chunk_overlap=Config.CHUNK_OVERLAP,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
 
 
-def chunk_pages(pages: List[Dict], doc_id: str, filename: str) -> List[Dict]:
-    """Split pages into chunks with metadata preservation."""
-    # Initialize splitter with config settings
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=Config.CHUNK_SIZE,
-        chunk_overlap=Config.CHUNK_OVERLAP,
-        separators=["\n\n", "\n", ". ", " ", ""]
-    )
-    
+def chunk_pages(pages: List[Dict]) -> List[Dict]:
+    """Split pages into chunks while preserving metadata."""
+
     chunks = []
-    chunk_index = 0
-    
+    global_chunk_index = 0
+
     for page in pages:
-        # Split page text into chunks
-        page_chunks = splitter.split_text(page["text"])
-        
-        for chunk_text in page_chunks:
-            # Skip tiny chunks
+        text = page.get("text", "")
+        page_num = page.get("page_num", -1)
+        doc_id = page.get("doc_id", "unknown_doc")
+        filename = page.get("source", "unknown_source")
+
+        # Skip empty pages
+        if not text:
+            continue
+
+        page_chunks = _text_splitter.split_text(text)
+
+        for chunk_index_in_page, chunk_text in enumerate(page_chunks):
+            # Skip very small chunks
             if len(chunk_text) < 50:
                 continue
-            
-            chunks.append({
-                "text": chunk_text,
-                "doc_id": doc_id,
-                "filename": filename,
-                "page_num": page["page_num"],
-                "chunk_index": chunk_index,
-                "char_count": len(chunk_text)
-            })
-            chunk_index += 1
-    
-    logger.info(f"Created {len(chunks)} chunks from {len(pages)} pages")
+
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "doc_id": doc_id,
+                    "chunk_id": f"{doc_id}_chunk_{global_chunk_index}",
+                    "filename": filename,
+                    "page_num": page_num,
+                    "chunk_index": global_chunk_index,
+                    "chunk_index_in_page": chunk_index_in_page,
+                    "char_count": len(chunk_text),
+                }
+            )
+
+            global_chunk_index += 1
+
+    # Add total_chunks metadata
+    total_chunks = len(chunks)
+    for chunk in chunks:
+        chunk["total_chunks"] = total_chunks
+
     return chunks
