@@ -6,7 +6,7 @@ from typing import Optional
 from src.ingestion.parser import extract_pages
 from src.ingestion.chunker import chunk_pages
 from src.ingestion.embedder import embed_chunks
-from src.db.chroma_client import get_collection, reset_client, upsert_chunks
+from src.db.chroma_client import upsert_chunks
 
 
 def ingest(pdf_path: str) -> dict:
