@@ -21,11 +21,6 @@ def _get_model() -> SentenceTransformer:
 def embed_query(text: str) -> List[float]:
     """Generate embedding for a single query text.
 
-    Args:
-        text: Query string to embed
-
-    Returns:
-        Embedding vector as list of floats
     """
     model = _get_model()
     embedding = model.encode(text, convert_to_numpy=True)
