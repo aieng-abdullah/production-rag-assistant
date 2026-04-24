@@ -1,68 +1,32 @@
-"""Vector search using LangChain Chroma integration.
-
-Provides semantic search over document chunks using vector similarity.
+"""
+Description:
+         semantic similarity search using top=k methoad to return top-k most similar results.
 """
 
-from typing import List, Dict, Optional
-
+from typing import List
 from loguru import logger
+from src.ingestion.embedder import embed_query, _get_model
+from src.db.chroma_client import get_collection
 
-from src.db.chroma_client import get_vectorstore
 
-
-def vector_search(query: str, top_k: int = 20) -> List[Dict]:
-    """Search for similar chunks using vector similarity.
-
-    Args:
-        query: The search query text.
-        top_k: Number of top results to return.
-
-    Returns:
-        List of chunk dictionaries with similarity scores.
-        Each dict contains: text, metadata, score
+def vector_search(query: str, top_k: int) -> list[dict]:
     """
-    logger.debug(f"Vector search: '{query[:50]}...' (top_k={top_k})")
+    semantic similrity search in vector stroe .use embed_query function to do embeddin
+    """
+    embeddings = embed_query(query)
 
-    vectorstore = get_vectorstore()
-
+    # search in tha vector stre
+    collection = get_collection()
     try:
-        # Perform similarity search with scores
-        results = vectorstore.similarity_search_with_relevance_scores(
-            query=query,
-            k=top_k,
-        )
 
-        # Format results to match existing chunk structure
-        chunks = []
-        for doc, score in results:
-            chunks.append({
-                "text": doc.page_content,
-                "doc_id": doc.metadata.get("doc_id", "unknown"),
-                "page_num": doc.metadata.get("page_num", -1),
-                "chunk_index": doc.metadata.get("chunk_index", -1),
-                "score": float(score),
-                "source": "vector",
-            })
-
-        logger.debug(f"Vector search returned {len(chunks)} results")
-        return chunks
+        results = collection.query(query_embeddings=[embeddings], n_results=top_k)
+        logger.info("vector search is done ")
 
     except Exception as e:
-        logger.error(f"Vector search failed: {e}")
-        raise RuntimeError(f"Vector search error: {e}")
+        logger.error("there is an errro while vextor search")
+        raise RuntimeError("Error while vector search")
 
-
-def get_retriever(top_k: int = 20):
-    """Get a LangChain retriever for use in chains.
-
-    Args:
-        top_k: Number of documents to retrieve.
-
-    Returns:
-        A LangChain retriever instance.
-    """
-    vectorstore = get_vectorstore()
-    return vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": top_k},
-    )
+    chunks = []
+    for text, metadata in zip(results["documents"][0], results["metadatas"][0]):
+        chunks.append({"text": text, **metadata})
+    return chunks
