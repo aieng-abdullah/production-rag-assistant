@@ -1,98 +1,97 @@
 """
-ChromaDB client for vector storage and retrieval.
+ChromaDB client using pure LangChain Chroma integration.
 """
 
-from typing import Optional
+from typing import Optional, List, Dict
 
-import chromadb
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
 from loguru import logger
 from src.config import Config
+from src.ingestion.embedder import _get_model as get_embedding_model
 
-_client: Optional[chromadb.Client] = None
+# Lazy-loaded vectorstore instance
+_vectorstore: Optional[Chroma] = None
 
 
-def get_chroma_client() -> chromadb.Client:
-    """
-    Returns a cached ChromaDB client.
-    Creates it on first call, reuses on subsequent calls.
-    """
-    global _client
-
-    if _client is not None:
-        return _client
-
-    if Config.CHROMA_MODE == "local":
-        Config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"ChromaDB: local mode → {Config.CHROMA_DIR}")
-        _client = chromadb.PersistentClient(path=str(Config.CHROMA_DIR))
-
-    elif Config.CHROMA_MODE == "prod":
-        logger.info(f"ChromaDB: prod mode → {Config.CHROMA_HOST}:{Config.CHROMA_PORT}")
-        _client = chromadb.HttpClient(
-            host=Config.CHROMA_HOST,
-            port=Config.CHROMA_PORT,
+def _get_vectorstore() -> Chroma:
+    """Get or initialize the LangChain Chroma vectorstore."""
+    global _vectorstore
+    if _vectorstore is None:
+        embedding_model = get_embedding_model()
+        _vectorstore = Chroma(
+            collection_name=Config.COLLECTION_NAME,
+            embedding_function=embedding_model,
+            persist_directory=str(Config.CHROMA_DIR),
         )
+        logger.info(f"LangChain Chroma initialized: {Config.COLLECTION_NAME}")
+    return _vectorstore
 
-    else:
-        raise ValueError(
-            f"Invalid CHROMA_MODE: '{Config.CHROMA_MODE}'. "
-            f"Must be 'local' or 'prod'."
+
+def get_collection():
+    """
+    Returns the underlying Chroma collection for compatibility.
+    Accesses the internal _collection from LangChain Chroma.
+    """
+    vectorstore = _get_vectorstore()
+    # Access internal collection for backward compatibility
+    return vectorstore._collection
+
+
+def upsert_chunks(chunks: List[Dict]) -> int:
+    """
+    Add or update chunks in the vectorstore using LangChain add_documents.
+    """
+    vectorstore = _get_vectorstore()
+
+    # Convert chunks to LangChain Documents
+    documents = []
+    ids = []
+    for chunk in chunks:
+        doc = Document(
+            page_content=chunk["text"],
+            metadata={
+                "doc_id": chunk.get("doc_id", "unknown"),
+                "page_num": chunk.get("page_num", -1),
+                "chunk_index": chunk.get("chunk_index", -1),
+            }
         )
+        documents.append(doc)
+        ids.append(chunk.get("chunk_id", f"chunk_{len(ids)}"))
 
-    return _client
-
-
-def get_collection() -> chromadb.Collection:
-    """
-    Returns the main document collection.
-    """
-    client = get_chroma_client()
-
-    collection = client.get_or_create_collection(
-        name=Config.COLLECTION_NAME,
-        metadata={
-            "hnsw:space": "cosine",
-            "hnsw:construction_ef": 200,
-            "hnsw:search_ef": 100,
-        },
-    )
-
-    logger.debug(
-        f"Collection '{Config.COLLECTION_NAME}' ready — {collection.count()} docs"
-    )
-    return collection
-
-
-def upsert_chunks(chunks: list[dict]) -> int:
-    """
-    Extracts IDs, embeddings, and text from a list of chunks and upserts them
-    into the specified collection.
-    """
-    collection = get_collection()
-
-    # extracting data from
-    ids = [chunk["chunk_id"] for chunk in chunks]
-    embeddings = [chunk["embedding"] for chunk in chunks]
-    documents = [chunk["text"] for chunk in chunks]
-    metadatas = [
-        {
-            "doc_id": chunk["doc_id"],
-            "page_num": chunk["page_num"],
-            "chunk_index": chunk["chunk_index"],
-        }
-        for chunk in chunks
-    ]
-
-    collection.upsert(
-        ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas
-    )
+    vectorstore.add_documents(documents=documents, ids=ids)
+    logger.info(f"Upserted {len(chunks)} chunks to vectorstore")
     return len(chunks)
+
+
+def load_all_chunks() -> List[Dict]:
+    """
+    Load all chunks from the vectorstore.
+    Uses the underlying collection for efficient retrieval.
+    """
+    vectorstore = _get_vectorstore()
+    collection = vectorstore._collection
+
+    results = collection.get()
+    chunks = []
+    for text, metadata in zip(results["documents"], results["metadatas"]):
+        chunks.append({"text": text, **metadata})
+    return chunks
 
 
 def reset_client():
     """
-    Resets the singleton client (useful for tests).
+    Resets the singleton vectorstore (useful for tests).
     """
-    global _client
-    _client = None
+    global _vectorstore
+    _vectorstore = None
+    logger.debug("Vectorstore reset")
+
+
+def get_vectorstore() -> Chroma:
+    """Get the LangChain Chroma vectorstore for use in chains.
+
+    Returns:
+        Chroma vectorstore instance.
+    """
+    return _get_vectorstore()
