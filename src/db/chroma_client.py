@@ -75,7 +75,11 @@ def load_all_chunks() -> List[Dict]:
     results = collection.get()
     chunks = []
     for text, metadata in zip(results["documents"], results["metadatas"]):
-        chunks.append({"text": text, **metadata})
+        chunks.append({
+        "text": text,
+        "chunk_id": f"{metadata['doc_id']}_chunk_{metadata['chunk_index']}",
+        **metadata
+    })
     return chunks
 
 
