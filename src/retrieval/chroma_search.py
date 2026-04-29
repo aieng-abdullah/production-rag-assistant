@@ -28,5 +28,11 @@ def vector_search(query: str, top_k: int) -> list[dict]:
 
     chunks = []
     for text, metadata in zip(results["documents"][0], results["metadatas"][0]):
-        chunks.append({"text": text, **metadata})
+        chunks.append({
+        "text": text,
+        "chunk_id": f"{metadata['doc_id']}_chunk_{metadata['chunk_index']}",
+        **metadata
+    })
+    
+        
     return chunks
