@@ -42,13 +42,7 @@ def embed_query(text: str) -> List[float]:
 def embed_chunks(chunks: List[Dict], batch_size: int = 32) -> List[Dict]:
     """Generate embeddings for chunks in batches.
 
-    Args:
-        chunks: List of chunk dictionaries with 'text' field.
-        batch_size: Number of texts to embed at once (used for logging only
-                   as HuggingFaceEmbeddings handles batching internally).
 
-    Returns:
-        Chunks with 'embedding' field added.
     """
     model = _get_model()
     texts = [chunk["text"] for chunk in chunks]
