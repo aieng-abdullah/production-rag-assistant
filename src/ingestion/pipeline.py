@@ -18,17 +18,6 @@ def ingest(pdf_path: str) -> dict:
         2. Split pages into chunks
         3. Generate embeddings for chunks
         4. Store chunks in vector database
-
-    Args:
-        pdf_path: Path to the PDF file.
-
-    Returns:
-        Dictionary with page count and chunk count.
-
-    Raises:
-        FileNotFoundError: If PDF file doesn't exist.
-        ValueError: If extraction or chunking produces no results.
-        RuntimeError: If any pipeline step fails.
     """
     # Step 1: Extract pages from PDF
     try:
