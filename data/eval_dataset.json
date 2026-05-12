@@ -1,0 +1,23 @@
+[
+  {
+    "question": "What is the Transformer model?",
+    "ground_truth": "The Transformer is a model architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."
+  },
+  {
+    "question": "What is self-attention?",
+    "ground_truth": "Self-attention is an attention mechanism that relates different positions of a single sequence to compute a representation of that sequence."
+  },
+  {
+    "question": "How many attention heads did the authors use?",
+    "ground_truth": "The authors used 8 parallel attention heads."
+  },
+  {
+    "question": "What optimizer was used to train the Transformer?",
+    "ground_truth": "The Adam optimizer was used with custom learning rate scheduling."
+  },
+  {
+    "question": "What tasks was the Transformer evaluated on?",
+    "ground_truth": "The Transformer was evaluated on English-to-German and English-to-French translation tasks."
+  }
+]
+  

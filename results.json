@@ -1,0 +1,92 @@
+{
+  "metric_scores": {
+    "faithfulness": 0.8333333333333334,
+    "answer_relevancy": 0.9006627987453409,
+    "context_precision": 0.39999999998666663,
+    "context_recall": 1.0
+  },
+  "threshold_results": {
+    "faithfulness": {
+      "score": 0.8333,
+      "threshold": 0.75,
+      "status": "PASS"
+    },
+    "answer_relevancy": {
+      "score": 0.9007,
+      "threshold": 0.75,
+      "status": "PASS"
+    },
+    "context_precision": {
+      "score": 0.4,
+      "threshold": 0.7,
+      "status": "FAIL"
+    },
+    "context_recall": {
+      "score": 1.0,
+      "threshold": 0.7,
+      "status": "PASS"
+    }
+  },
+  "samples": [
+    {
+      "question": "What is the Transformer model?",
+      "answer": "The Transformer model is a sequence transduction model based entirely on attention, replacing the recurrent layers most commonly used in encoder-decoder architectures with multi-headed self-attention [SOURCE 1]. It is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence-aligned recurrence [SOURCE 4].\n\nThe Transformer model architecture follows a stacked self-attention and point-wise, fully connected layers for both the encoder and decoder [SOURCE 1]. It is composed of a stack of N = 6 identical layers, with each layer having two sub-layers: a multi-head self-attention mechanism and a simple, position-wise fully connected feed-forward network [SOURCE 2].\n\nThe Transformer model allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs [SOURCE 5]. It has been shown to perform well on various tasks, including translation tasks, and can be trained significantly faster than architectures based on recurrent or convolutional layers [SOURCE 3].",
+      "contexts": [
+        "Figure 1: The Transformer - model architecture.\nThe Transformer follows this overall architecture using stacked self-attention and point-wise, fully\nconnected layers for both the encoder and decoder, shown in the left and right halves of Figure 1,\nrespectively.\n3.1\nEncoder and Decoder Stacks\nEncoder:\nThe encoder is composed of a stack of N = 6 identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-",
+        "7\nConclusion\nIn this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly faster than architectures based\non recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014",
+        "End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-\naligned recurrence and have been shown to perform well on simple-language question answering and\nlanguage modeling tasks [34].\nTo the best of our knowledge, however, the Transformer is the first transduction model relying\nentirely on self-attention to compute representations of its input and output without using sequence-",
+        "tion models in various tasks, allowing modeling of dependencies without regard to their distance in\nthe input or output sequences [2, 19]. In all but a few cases [27], however, such attention mechanisms\nare used in conjunction with a recurrent network.\nIn this work we propose the Transformer, a model architecture eschewing recurrence and instead\nrelying entirely on an attention mechanism to draw global dependencies between input and output.",
+        "The Transformer allows for significantly more parallelization and can reach a new state of the art in\ntranslation quality after being trained for as little as twelve hours on eight P100 GPUs.\n2\nBackground\nThe goal of reducing sequential computation also forms the foundation of the Extended Neural GPU\n[16], ByteNet [18] and ConvS2S [9], all of which use convolutional neural networks as basic building\nblock, computing hidden representations in parallel for all input and output positions. In these models,"
+      ],
+      "ground_truth": "The Transformer is a model architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."
+    },
+    {
+      "question": "What is self-attention?",
+      "answer": "Self-attention is an attention mechanism that relates different positions of a single sequence in order to compute a representation of the sequence [4, 27, 28, 22]. It is used in various tasks such as reading comprehension, abstractive summarization, textual entailment, and learning task-independent sentence representations [4, 27, 28, 22]. Self-attention allows the model to focus on different parts of the input sequence and weigh their importance accordingly, which can help in capturing long-range dependencies in the data [12]. \n\nIn the context of self-attention, the length of the input sequence (n) is often smaller than the representation dimensionality (d), which is typically the case in sentence representations used by state-of-the-art models in machine translation, such as word-piece [38] and byte-pair [31] representations [SOURCE 2].",
+      "contexts": [
+        "described in section 3.2.\nSelf-attention, sometimes called intra-attention is an attention mechanism relating different positions\nof a single sequence in order to compute a representation of the sequence. Self-attention has been\nused successfully in a variety of tasks including reading comprehension, abstractive summarization,\ntextual entailment and learning task-independent sentence representations [4, 27, 28, 22].",
+        "length n is smaller than the representation dimensionality d, which is most often the case with\nsentence representations used by state-of-the-art models in machine translations, such as word-piece\n[38] and byte-pair [31] representations. To improve computational performance for tasks involving\nvery long sequences, self-attention could be restricted to considering only a neighborhood of size r in\nthe input sequence centered around the respective output position. This would increase the maximum",
+        "during training.\n4\nWhy Self-Attention\nIn this section we compare various aspects of self-attention layers to the recurrent and convolu-\ntional layers commonly used for mapping one variable-length sequence of symbol representations\n(x1, ..., xn) to another sequence of equal length (z1, ..., zn), with xi, zi \u2208Rd, such as a hidden\nlayer in a typical sequence transduction encoder or decoder. Motivating our use of self-attention we\nconsider three desiderata.",
+        "encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of\nthe verb \u2018making\u2019, completing the phrase \u2018making...more difficult\u2019. Attentions here shown only for\nthe word \u2018making\u2019. Different colors represent different heads. Best viewed in color.\n13",
+        "traverse in the network. The shorter these paths between any combination of positions in the input\nand output sequences, the easier it is to learn long-range dependencies [12]. Hence we also compare\nthe maximum path length between any two input and output positions in networks composed of the\ndifferent layer types.\nAs noted in Table 1, a self-attention layer connects all positions with a constant number of sequentially"
+      ],
+      "ground_truth": "Self-attention is an attention mechanism that relates different positions of a single sequence to compute a representation of that sequence."
+    },
+    {
+      "question": "How many attention heads did the authors use?",
+      "answer": "According to the text, the authors employed h = 8 parallel attention layers, or heads [SOURCE 2].",
+      "contexts": [
+        "-\nthis\nis\nwhat\nwe\nare\nmissing\n,\nin\nmy\nopinion\n.\n<EOS>\n<pad>\nFigure 4: Two attention heads, also in layer 5 of 6, apparently involved in anaphora resolution. Top:\nFull attentions for head 5. Bottom: Isolated attentions from just the word \u2018its\u2019 for attention heads 5\nand 6. Note that the attentions are very sharp for this word.\n14",
+        "i\n\u2208Rdmodel\u00d7dk, W K\ni\n\u2208Rdmodel\u00d7dk, W V\ni\n\u2208Rdmodel\u00d7dv\nand W O \u2208Rhdv\u00d7dmodel.\nIn this work we employ h = 8 parallel attention layers, or heads. For each of these we use\ndk = dv = dmodel/h = 64. Due to the reduced dimension of each head, the total computational cost\nis similar to that of single-head attention with full dimensionality.\n3.2.3\nApplications of Attention in our Model\nThe Transformer uses multi-head attention in three different ways:",
+        "-\nthis\nis\nwhat\nwe\nare\nmissing\n,\nin\nmy\nopinion\n.\n<EOS>\n<pad>\nFigure 5: Many of the attention heads exhibit behaviour that seems related to the structure of the\nsentence. We give two such examples above, from two different heads from the encoder self-attention\nat layer 5 of 6. The heads clearly learned to perform different tasks.\n15",
+        "checkpoint averaging. We present these results in Table 3.\nIn Table 3 rows (A), we vary the number of attention heads and the attention key and value dimensions,\nkeeping the amount of computation constant, as described in Section 3.2.2. While single-head\nattention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.\nIn Table 3 rows (B), we observe that reducing the attention key size dk hurts model quality. This",
+        "encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of\nthe verb \u2018making\u2019, completing the phrase \u2018making...more difficult\u2019. Attentions here shown only for\nthe word \u2018making\u2019. Different colors represent different heads. Best viewed in color.\n13"
+      ],
+      "ground_truth": "The authors used 8 parallel attention heads."
+    },
+    {
+      "question": "What optimizer was used to train the Transformer?",
+      "answer": "The Adam optimizer was used to train the Transformer [SOURCE 20]. The specific parameters used were \u03b21 = 0.9, \u03b22 = 0.98, and \u03f5 = 10\u22129 [SOURCE 20]. Additionally, the learning rate was varied over the course of training according to a custom formula [SOURCE 20], where warmup_steps = 4000 [SOURCE 20].",
+      "contexts": [
+        "We trained a 4-layer transformer with dmodel = 1024 on the Wall Street Journal (WSJ) portion of the\nPenn Treebank [25], about 40K training sentences. We also trained it in a semi-supervised setting,\nusing the larger high-confidence and BerkleyParser corpora from with approximately 17M sentences\n[37]. We used a vocabulary of 16K tokens for the WSJ only setting and a vocabulary of 32K tokens\nfor the semi-supervised setting.",
+        "architectures from the literature. We estimate the number of floating point operations used to train a\nmodel by multiplying the training time, the number of GPUs used, and an estimate of the sustained\nsingle-precision floating-point capacity of each GPU 5.\n6.2\nModel Variations\nTo evaluate the importance of different components of the Transformer, we varied our base model\nin different ways, measuring the change in performance on English-to-German translation on the",
+        "7\nConclusion\nIn this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly faster than architectures based\non recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014",
+        "the competitive models.\nOn the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of 41.0,\noutperforming all of the previously published single models, at less than 1/4 the training cost of the\nprevious state-of-the-art model. The Transformer (big) model trained for English-to-French used\ndropout rate Pdrop = 0.1, instead of 0.3.\nFor the base models, we used a single model obtained by averaging the last 5 checkpoints, which",
+        "(3.5 days).\n5.3\nOptimizer\nWe used the Adam optimizer [20] with \u03b21 = 0.9, \u03b22 = 0.98 and \u03f5 = 10\u22129. We varied the learning\nrate over the course of training, according to the formula:\nlrate = d\u22120.5\nmodel \u00b7 min(step_num\u22120.5, step_num \u00b7 warmup_steps\u22121.5)\n(3)\nThis corresponds to increasing the learning rate linearly for the first warmup_steps training steps,\nand decreasing it thereafter proportionally to the inverse square root of the step number. We used\nwarmup_steps = 4000.\n5.4\nRegularization"
+      ],
+      "ground_truth": "The Adam optimizer was used with custom learning rate scheduling."
+    },
+    {
+      "question": "What tasks was the Transformer evaluated on?",
+      "answer": "The Transformer was evaluated on the following tasks:\n\n1. English-to-German translation [SOURCE 4]\n2. English-to-French translation [SOURCE 5]\n3. English constituency parsing [SOURCE 2] (with large and limited training data)\n\nNote: Although the text mentions that the Transformer generalizes well to other tasks, it only specifically mentions these three tasks as being evaluated.",
+      "contexts": [
+        "results to the base model.\n6.3\nEnglish Constituency Parsing\nTo evaluate if the Transformer can generalize to other tasks we performed experiments on English\nconstituency parsing. This task presents specific challenges: the output is subject to strong structural\nconstraints and is significantly longer than the input. Furthermore, RNN sequence-to-sequence\nmodels have not been able to attain state-of-the-art results in small-data regimes [37].",
+        "End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-\naligned recurrence and have been shown to perform well on simple-language question answering and\nlanguage modeling tasks [34].\nTo the best of our knowledge, however, the Transformer is the first transduction model relying\nentirely on self-attention to compute representations of its input and output without using sequence-",
+        "7\nConclusion\nIn this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly faster than architectures based\non recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014",
+        "our model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.\n\u2217Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and started",
+        "English-to-French translation tasks, we achieve a new state of the art. In the former task our best\nmodel outperforms even all previously reported ensembles.\nWe are excited about the future of attention-based models and plan to apply them to other tasks. We\nplan to extend the Transformer to problems involving input and output modalities other than text and\nto investigate local, restricted attention mechanisms to efficiently handle large inputs and outputs"
+      ],
+      "ground_truth": "The Transformer was evaluated on English-to-German and English-to-French translation tasks."
+    }
+  ]
+}
