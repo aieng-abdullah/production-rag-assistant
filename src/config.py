@@ -30,8 +30,8 @@ class Config:
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  
 
     # --- Retrieval Params ---
-    CHUNK_SIZE = 512
-    CHUNK_OVERLAP = 64
+    CHUNK_SIZE = 350
+    CHUNK_OVERLAP = 75
     TOP_K_VECTOR = 20
     TOP_K_BM25 = 20
     TOP_K_RERANK = 5
