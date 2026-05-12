@@ -1,28 +1,27 @@
-"""Embedding generation using LangChain HuggingFaceEmbeddings."""
+"""Embedding generation using LangChain HuggingFaceEmbeddings.
 
-from typing import List, Dict
+Backward compatibility wrapper around EmbeddingModel class.
+"""
+
+from typing import List, Dict, Optional
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from loguru import logger
 
 from src.config import Config
+from src.core.embedding_model import EmbeddingModel
 
 
-# Lazy-loaded model instance
-_model: HuggingFaceEmbeddings | None = None
+# Lazy-loaded model instance (for backward compatibility)
+_model_instance: Optional[EmbeddingModel] = None
 
 
 def _get_model() -> HuggingFaceEmbeddings:
-    """Get or initialize the embedding model."""
-    global _model
-    if _model is None:
-        _model = HuggingFaceEmbeddings(
-            model_name=Config.EMBEDDING_MODEL,
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
-        )
-        logger.info(f"Loaded embedding model: {Config.EMBEDDING_MODEL}")
-    return _model
+    """Get or initialize the embedding model (backward compatibility wrapper)."""
+    global _model_instance
+    if _model_instance is None:
+        _model_instance = EmbeddingModel()
+    return _model_instance.model
 
 
 def embed_query(text: str) -> List[float]:
@@ -42,7 +41,12 @@ def embed_query(text: str) -> List[float]:
 def embed_chunks(chunks: List[Dict], batch_size: int = 32) -> List[Dict]:
     """Generate embeddings for chunks in batches.
 
+    Args:
+        chunks: List of chunk dictionaries.
+        batch_size: Batch size hint (handled internally by model).
 
+    Returns:
+        List of chunk dictionaries with 'embedding' field added.
     """
     model = _get_model()
     texts = [chunk["text"] for chunk in chunks]

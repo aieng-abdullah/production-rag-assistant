@@ -2,6 +2,8 @@
 pipeline.py:
             pipeline: retrieves relevant text chunks from a vector database using embeddings,
             using traditional BM25 search and vector search then uses a reranker to combine them.
+
+Backward compatibility wrapper around RetrievalPipeline class.
 """
 from loguru import logger
 
@@ -9,6 +11,10 @@ from src.retrieval.bm25_index import bm25_search
 from src.retrieval.chroma_search import vector_search
 from src.retrieval.hybrid_fusion import rrf_fusion
 from src.retrieval.cross_encoder import rerank
+from src.core.retrieval_pipeline import RetrievalPipeline
+from src.core.vector_store import VectorStore
+from src.core.bm25_retriever import BM25Retriever
+from src.core.cross_encoder import CrossEncoderReranker
 
 
 def retrieval(
@@ -24,6 +30,16 @@ def retrieval(
 
     lf_retrieval_parent: optional Langfuse retriever span; when set, records bm25 / vector /
     rrf / rerank as child retriever observations.
+    
+    Args:
+        query: Search query string.
+        chunks: List of all chunks to search from.
+        bm25_index: BM25 index (for backward compatibility).
+        top_k: Number of final results to return.
+        lf_retrieval_parent: Optional Langfuse retriever span for tracing.
+        
+    Returns:
+        List of reranked chunk dictionaries.
     """
     def _traced_step(name: str, fn):
         if lf_retrieval_parent is None:

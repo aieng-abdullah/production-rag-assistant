@@ -3,20 +3,24 @@
 Implements the specification from streamlit_spec.md:
 - Left sidebar: app title, PDF uploader, document list
 - Main area: chat history, citations as expanders, chat input
+
+Uses core classes for better architecture.
 """
 
 import os
-import shutil
 from pathlib import Path
 
 import streamlit as st
+from langchain_groq import ChatGroq
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import load_all_chunks
-from src.generation.chain import generate
+from src.core.vector_store import VectorStore
+from src.core.bm25_retriever import BM25Retriever
+from src.core.cross_encoder import CrossEncoderReranker
+from src.core.retrieval_pipeline import RetrievalPipeline
+from src.core.rag_generator import RAGGenerator
 from src.ingestion.pipeline import ingest
-from src.retrieval.bm25_index import build_bm25_index
 
 # Constants
 DATA_DIR = Path("data/raw")
@@ -35,8 +39,14 @@ def init_session_state():
         st.session_state.messages = []
     if "chunks" not in st.session_state:
         st.session_state.chunks = []
-    if "bm25_index" not in st.session_state:
-        st.session_state.bm25_index = None
+    if "vector_store" not in st.session_state:
+        st.session_state.vector_store = None
+    if "bm25_retriever" not in st.session_state:
+        st.session_state.bm25_retriever = None
+    if "retrieval_pipeline" not in st.session_state:
+        st.session_state.retrieval_pipeline = None
+    if "rag_generator" not in st.session_state:
+        st.session_state.rag_generator = None
     if "ingested_docs" not in st.session_state:
         st.session_state.ingested_docs = []
 
@@ -50,7 +60,7 @@ def save_uploaded_file(uploaded_file) -> Path:
 
 
 def process_pdf(file_path: Path):
-    """Process PDF through ingestion pipeline."""
+    """Process PDF through ingestion pipeline using core classes."""
     with st.spinner(f"Processing {file_path.name}..."):
         progress_bar = st.progress(0)
 
@@ -59,13 +69,33 @@ def process_pdf(file_path: Path):
             result = ingest(str(file_path))
             progress_bar.progress(50)
 
-            # Step 2: Reload chunks
-            st.session_state.chunks = load_all_chunks()
+            # Step 2: Initialize core classes
+            st.session_state.vector_store = VectorStore()
+            st.session_state.bm25_retriever = BM25Retriever()
+            st.session_state.cross_encoder = CrossEncoderReranker()
             progress_bar.progress(75)
 
-            # Step 3: Rebuild BM25 index
+            # Step 3: Load chunks
+            st.session_state.chunks = st.session_state.vector_store.load_all()
+            
+            # Step 4: Build BM25 index
             if st.session_state.chunks:
-                st.session_state.bm25_index = build_bm25_index(st.session_state.chunks)
+                st.session_state.bm25_retriever.build_index(st.session_state.chunks)
+            
+            # Step 5: Create retrieval pipeline
+            st.session_state.retrieval_pipeline = RetrievalPipeline(
+                vector_store=st.session_state.vector_store,
+                bm25_retriever=st.session_state.bm25_retriever,
+                cross_encoder=st.session_state.cross_encoder,
+                top_k=5,
+            )
+            
+            # Step 6: Create RAG generator
+            llm = ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL)
+            st.session_state.rag_generator = RAGGenerator(
+                llm=llm,
+                retrieval_pipeline=st.session_state.retrieval_pipeline,
+            )
             progress_bar.progress(100)
 
             # Add to ingested docs
@@ -100,13 +130,13 @@ def display_cited_answer(cited_answer):
 
 
 def handle_query(query: str):
-    """Handle user query and generate response."""
+    """Handle user query and generate response using core classes."""
     if not st.session_state.chunks:
         st.warning("⚠️ Please upload a PDF first!")
         return
 
-    if st.session_state.bm25_index is None:
-        st.warning("⚠️ BM25 index not ready. Please process a PDF first.")
+    if st.session_state.rag_generator is None:
+        st.warning("⚠️ RAG generator not ready. Please process a PDF first.")
         return
 
     # Add user message
@@ -115,11 +145,10 @@ def handle_query(query: str):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                # Generate answer
-                cited_answer = generate(
+                # Generate answer using RAGGenerator
+                cited_answer = st.session_state.rag_generator.generate(
                     query,
                     st.session_state.chunks,
-                    st.session_state.bm25_index,
                 )
 
                 # Display answer with citations
@@ -187,8 +216,8 @@ def render_sidebar():
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Stats")
         st.sidebar.text(f"Total chunks: {len(st.session_state.chunks)}")
-        if st.session_state.bm25_index:
-            st.sidebar.text("BM25 index: ✅ Ready")
+        if st.session_state.rag_generator:
+            st.sidebar.text("RAG Pipeline: ✅ Ready")
 
 
 def render_chat():

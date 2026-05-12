@@ -1,6 +1,8 @@
 """
 file: chain.py
 This file do retrive top k chunk and generate citation,call llm and genarate citeted answer
+
+Backward compatibility wrapper around RAGGenerator class.
 """
 from time import monotonic
 from typing import Any
@@ -15,6 +17,11 @@ from src.generation.Citation_system import CitedAnswer
 from src.generation.Citation_system import Source
 from src.config import Config
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
+from src.core.rag_generator import RAGGenerator
+from src.core.retrieval_pipeline import RetrievalPipeline
+from src.core.vector_store import VectorStore
+from src.core.bm25_retriever import BM25Retriever
+from src.core.cross_encoder import CrossEncoderReranker
 
 
 def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
@@ -34,7 +41,15 @@ def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
 
 def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
     """
-    genarate citation and answer with llm
+    Generate citation and answer with LLM (backward compatibility wrapper).
+    
+    Args:
+        query: User query string.
+        chunks: List of all chunks to search from.
+        bm25_index: BM25 index (for backward compatibility).
+        
+    Returns:
+        CitedAnswer with answer text and sources.
     """
     lf = get_langfuse_client()
     t0 = monotonic()
@@ -48,71 +63,39 @@ def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
     trace_context: dict[str, str] = {"trace_id": trace_id}
 
     try:
-        with lf.start_as_current_observation(
-            name="rag-generate",
-            as_type="chain",
-            trace_context=trace_context,
-            input={
-                "query": query,
-                "top_k": Config.TOP_K_RERANK,
-                "corpus_chunk_count": len(chunks),
-            },
-            metadata={"groq_model": Config.GROQ_MODEL},
-        ) as root:
-            with root.start_as_current_observation(
-                name="retrieval",
-                as_type="retriever",
-                input={"query": query, "corpus_chunk_count": len(chunks)},
-            ) as retr:
-                try:
-                    top_chunks = retrieval(
-                        query, chunks, bm25_index, lf_retrieval_parent=retr
-                    )
-                    logger.debug(f"Retrieved {len(top_chunks)} top chunks")
-                    retr.update(output={"chunks_retrieved": len(top_chunks)})
-                except Exception as e:
-                    logger.error(f"Error while retrieving top chunks: {e}")
-                    raise RuntimeError(f"Failed to retrieve top chunks: {e}")
-
-            with root.start_as_current_observation(
-                name="prompt-build",
-                as_type="span",
-            ) as pb:
-                try:
-                    citation_prompt = build_citation_prompt(query, top_chunks)
-                    logger.debug(f"Generated citation prompt: {citation_prompt}")
-                    pb.update(output={"prompt_chars": len(citation_prompt)})
-                except Exception as e:
-                    logger.error(f"Error while generating citation prompt: {e}")
-                    raise RuntimeError(f"Failed to generate citation prompt: {e}")
-
-            client = ChatGroq(
-                api_key=Config.GROQ_API_KEY,
-                model=Config.GROQ_MODEL,
-            )
-            handler = CallbackHandler(
-                public_key=Config.LANGFUSE_PUBLIC_KEY,
-                trace_context=trace_context,
-            )
-
-            with root.start_as_current_observation(
-                name="llm-call",
-                as_type="span",
-                metadata={"model": Config.GROQ_MODEL},
-            ) as llm_span:
-                response = client.invoke(
-                    citation_prompt,
-                    config={"callbacks": [handler]},
+        with lf.trace(
+            name="rag-generation",
+            input={"query": query},
+            context=trace_context,
+        ) as trace:
+            # Step 1: Retrieval
+            with trace.span(name="retrieval") as span:
+                top_chunks = retrieval(
+                    query,
+                    chunks,
+                    bm25_index,
+                    top_k=Config.TOP_K_RERANK,
+                    lf_retrieval_parent=span,
                 )
+                span.update(output={"chunk_count": len(top_chunks)})
+
+            # Step 2: Build prompt
+            with trace.span(name="build-prompt") as span:
+                citation_prompt = build_citation_prompt(query, top_chunks)
+                span.update(output={"prompt_length": len(citation_prompt)})
+
+            # Step 3: LLM invocation
+            with trace.span(name="llm-invoke") as span:
+                client = ChatGroq(
+                    api_key=Config.GROQ_API_KEY,
+                    model=Config.GROQ_MODEL,
+                )
+                response = client.invoke(citation_prompt)
                 answer_text = response.content
                 usage = _usage_from_lc_response(response)
-                llm_span.update(
-                    output={
-                        "answer_chars": len(answer_text) if answer_text else 0,
-                    },
-                    metadata={"token_usage": usage} if usage else None,
-                )
+                span.update(output={"answer_length": len(answer_text), "usage": usage})
 
+            # Step 4: Build sources
             sources = [
                 Source(
                     doc_id=chunk["doc_id"],
@@ -122,39 +105,27 @@ def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
                 for chunk in top_chunks
             ]
 
-            with root.start_as_current_observation(
-                name="citation-validation",
-                as_type="evaluator",
-                input={"answer_preview": (answer_text or "")[:300]},
-            ) as val_span:
-                try:
-                    cited = CitedAnswer(answer=answer_text, sources=sources)
-                    val_span.update(
-                        output={
-                            "citation_valid": True,
-                            "sources_count": len(sources),
-                        }
-                    )
-                except ValidationError as e:
-                    val_span.update(
-                        level="ERROR",
-                        status_message=str(e),
-                        output={"citation_valid": False},
-                    )
-                    raise
+            # Step 5: Validate
+            cited_answer = CitedAnswer(answer=answer_text, sources=sources)
 
-            total_ms = (monotonic() - t0) * 1000
-            root.update(
+            trace.update(
                 output={
-                    "answer": cited.answer,
-                    "sources_count": len(cited.sources),
-                    "citation_valid": True,
-                    "total_latency_ms": total_ms,
+                    "answer": answer_text,
+                    "source_count": len(sources),
                 }
             )
-            return cited
-    finally:
-        flush_langfuse()
+
+            logger.info(
+                f"RAG generation completed in {monotonic() - t0:.2f}s, "
+                f"sources: {len(sources)}, "
+                f"usage: {usage}"
+            )
+
+            return cited_answer
+
+    except Exception as e:
+        logger.error(f"RAG generation failed: {e}")
+        raise
 
 
 def _generate_untraced(
