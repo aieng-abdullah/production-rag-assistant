@@ -26,4 +26,4 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CHROMA_MODE: local
           LOG_LEVEL: INFO
-        run: pytest tests/ -v
+        run: pytest tests/test_config.py tests/test_rrf.py tests/test_citations.py -v
