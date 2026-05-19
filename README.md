@@ -261,6 +261,31 @@ Planned optimizations:
 
 ---
 
+# Observability & Monitoring
+
+Every query is traced end-to-end with Langfuse.
+
+Each trace captures:
+
+| Span | What It Tracks |
+|------|---------------|
+| retrieval | BM25 + vector + RRF + rerank latency |
+| prompt-build | prompt length and construction time |
+| llm-call | token usage, model, response time |
+| citation-validation | pass/fail status |
+
+### Latency Breakdown (from live traces)
+
+| Component | Latency | % of Total |
+|-----------|---------|------------|
+| Cross-Encoder Reranker | ~10s | 72% |
+| Vector Search | ~0.4s | 3% |
+| BM25 Search | ~0.17s | 1% |
+| Groq LLM | ~1.2s | 9% |
+| Other | ~2s | 15% |
+
+Bottleneck identified through Langfuse traces — not guessing.
+
 # Technology Stack
 
 | Layer | Technology |
