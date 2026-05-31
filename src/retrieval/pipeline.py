@@ -13,7 +13,6 @@ from src.retrieval.cross_encoder import rerank
 
 def retrieval(
     query: str,
-    chunks: list[dict],
     bm25_index,
     top_k: int = 5,
     lf_retrieval_parent=None,
@@ -45,7 +44,7 @@ def retrieval(
     try:
         bm25_results = _traced_step(
             "bm25-search",
-            lambda: bm25_search(bm25_index, query, chunks, top_k=20),
+            lambda: bm25_search(bm25_index, query, top_k=20),
         )
         logger.info(f"BM25 search returned {len(bm25_results)} results")
 

@@ -83,6 +83,20 @@ def load_all_chunks() -> List[Dict]:
     return chunks
 
 
+def has_chunks() -> bool:
+    """Check if any chunks exist in the vectorstore without loading them."""
+    vectorstore = _get_vectorstore()
+    collection = vectorstore._collection
+    return collection.count() > 0
+
+
+def count_chunks() -> int:
+    """Return the total number of chunks in the vectorstore without loading them."""
+    vectorstore = _get_vectorstore()
+    collection = vectorstore._collection
+    return collection.count()
+
+
 def reset_client():
     """
     Resets the singleton vectorstore (useful for tests).
@@ -99,3 +113,17 @@ def get_vectorstore() -> Chroma:
         Chroma vectorstore instance.
     """
     return _get_vectorstore()
+
+
+def has_chunks() -> bool:
+    """Check if any chunks exist in the vectorstore without loading them."""
+    vectorstore = _get_vectorstore()
+    collection = vectorstore._collection
+    return collection.count() > 0
+
+
+def count_chunks() -> int:
+    """Return the total number of chunks in the vectorstore without loading them."""
+    vectorstore = _get_vectorstore()
+    collection = vectorstore._collection
+    return collection.count()

@@ -35,15 +35,14 @@ THRESHOLDS = {
 llm = LangchainLLMWrapper(ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL))
 embeddings = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL,model_kwargs={"device": "cpu"}))
 
-_chunks = None
 _bm25_index = None
 
 def _get_pipeline():
-    global _chunks, _bm25_index
-    if _chunks is None:
-        _chunks = load_all_chunks()
-        _bm25_index = build_bm25_index(_chunks)
-    return _chunks, _bm25_index
+    global _bm25_index
+    if _bm25_index is None:
+        chunks = load_all_chunks()
+        _bm25_index = build_bm25_index(chunks)
+    return _bm25_index
 
 def load_eval_dataset(file_path: str) -> List[Dict[str, str]]:
     with open(file_path, "r", encoding="utf-8") as f:
@@ -52,8 +51,8 @@ def load_eval_dataset(file_path: str) -> List[Dict[str, str]]:
     return data
 
 def run_rag(question: str) -> Dict[str, Any]:
-    chunks, bm25_index = _get_pipeline()
-    cited_answer = generate(query=question, chunks=chunks, bm25_index=bm25_index)
+    bm25_index = _get_pipeline()
+    cited_answer = generate(query=question, bm25_index=bm25_index)
     return {
         "answer": cited_answer.answer,
         "contexts": [source.text for source in cited_answer.sources],
