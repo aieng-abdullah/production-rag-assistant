@@ -14,7 +14,6 @@ class Config:
     CHROMA_DIR = DATA_DIR / "chroma"
 
     # --- ChromaDB ---
-    CHROMA_MODE = os.getenv("CHROMA_MODE", "local")  
     CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
     COLLECTION_NAME = "research_docs"
@@ -32,10 +31,8 @@ class Config:
     # --- Retrieval Params ---
     CHUNK_SIZE = 350
     CHUNK_OVERLAP = 75
-    TOP_K_VECTOR = 20
-    TOP_K_BM25 = 20
     TOP_K_RERANK = 5
-    RRF_K = 60  # 
+    RRF_K = 60
 
     # --- Evaluation ---
     FAITHFULNESS_THRESHOLD = 0.80

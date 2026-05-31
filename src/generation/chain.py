@@ -41,7 +41,7 @@ def generate(query: str, bm25_index) -> CitedAnswer:
     t0 = monotonic()
 
     if lf is None:
-        return _generate_untraced(query, bm25_index, t0)
+        return _generate_untraced(query, bm25_index)
 
     from langfuse.langchain import CallbackHandler
 
@@ -159,7 +159,7 @@ def generate(query: str, bm25_index) -> CitedAnswer:
 
 
 def _generate_untraced(
-    query: str, bm25_index, t0: float
+    query: str, bm25_index
 ) -> CitedAnswer:
     try:
         top_chunks = retrieval(query, bm25_index)
@@ -190,5 +190,4 @@ def _generate_untraced(
         )
         for chunk in top_chunks
     ]
-    _ = (monotonic() - t0) * 1000
     return CitedAnswer(answer=answer_text, sources=sources)

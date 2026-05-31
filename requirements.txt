@@ -1,6 +1,4 @@
 # Core API & UI
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
 streamlit>=1.40.0
 
 # Vector DB & Search
@@ -23,7 +21,6 @@ ragas>=0.1.0
 
 # Monitoring & Logging
 loguru>=0.7.0
-langsmith>=0.1.0
 langfuse>=2.0.0
 
 # PDF Processing
@@ -35,7 +32,6 @@ python-dotenv>=1.0.0
 
 # Testing
 pytest>=8.3.0
-pytest-asyncio>=0.24.0
 
 # Utilities
 datasets>=3.0.0  # Required by ragas
