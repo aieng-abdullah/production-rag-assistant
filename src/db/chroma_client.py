@@ -57,7 +57,9 @@ def upsert_chunks(chunks: List[Dict]) -> int:
             }
         )
         documents.append(doc)
-        ids.append(chunk.get("chunk_id", f"chunk_{len(ids)}"))
+        doc_id = chunk.get("doc_id", "unknown")
+        chunk_index = chunk.get("chunk_index", len(ids))
+        ids.append(chunk.get("chunk_id", f"{doc_id}_chunk_{chunk_index}"))
 
     vectorstore.add_documents(documents=documents, ids=ids)
     logger.info(f"Upserted {len(chunks)} chunks to vectorstore")
@@ -113,17 +115,3 @@ def get_vectorstore() -> Chroma:
         Chroma vectorstore instance.
     """
     return _get_vectorstore()
-
-
-def has_chunks() -> bool:
-    """Check if any chunks exist in the vectorstore without loading them."""
-    vectorstore = _get_vectorstore()
-    collection = vectorstore._collection
-    return collection.count() > 0
-
-
-def count_chunks() -> int:
-    """Return the total number of chunks in the vectorstore without loading them."""
-    vectorstore = _get_vectorstore()
-    collection = vectorstore._collection
-    return collection.count()
