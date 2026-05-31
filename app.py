@@ -13,7 +13,7 @@ import streamlit as st
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import load_all_chunks
+from src.db.chroma_client import has_chunks, load_all_chunks, count_chunks
 from src.generation.chain import generate
 from src.ingestion.pipeline import ingest
 from src.retrieval.bm25_index import build_bm25_index
@@ -33,8 +33,6 @@ def init_session_state():
     """Initialize session state variables."""
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "chunks" not in st.session_state:
-        st.session_state.chunks = []
     if "bm25_index" not in st.session_state:
         st.session_state.bm25_index = None
     if "ingested_docs" not in st.session_state:
@@ -59,13 +57,13 @@ def process_pdf(file_path: Path):
             result = ingest(str(file_path))
             progress_bar.progress(50)
 
-            # Step 2: Reload chunks
-            st.session_state.chunks = load_all_chunks()
+            # Step 2: Rebuild BM25 index from all chunks
+            chunks = load_all_chunks()
             progress_bar.progress(75)
 
-            # Step 3: Rebuild BM25 index
-            if st.session_state.chunks:
-                st.session_state.bm25_index = build_bm25_index(st.session_state.chunks)
+            # Step 3: Build BM25 index
+            if chunks:
+                st.session_state.bm25_index = build_bm25_index(chunks)
             progress_bar.progress(100)
 
             # Add to ingested docs
@@ -101,7 +99,7 @@ def display_cited_answer(cited_answer):
 
 def handle_query(query: str):
     """Handle user query and generate response."""
-    if not st.session_state.chunks:
+    if not has_chunks():
         st.warning("⚠️ Please upload a PDF first!")
         return
 
@@ -118,7 +116,6 @@ def handle_query(query: str):
                 # Generate answer
                 cited_answer = generate(
                     query,
-                    st.session_state.chunks,
                     st.session_state.bm25_index,
                 )
 
@@ -183,10 +180,10 @@ def render_sidebar():
         st.sidebar.info("No documents uploaded yet")
 
     # Stats
-    if st.session_state.chunks:
+    if has_chunks():
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Stats")
-        st.sidebar.text(f"Total chunks: {len(st.session_state.chunks)}")
+        st.sidebar.text(f"Total chunks: {count_chunks()}")
         if st.session_state.bm25_index:
             st.sidebar.text("BM25 index: ✅ Ready")
 

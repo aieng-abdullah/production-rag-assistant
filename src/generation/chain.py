@@ -14,6 +14,7 @@ from src.generation.Citation_system import build_citation_prompt
 from src.generation.Citation_system import CitedAnswer
 from src.generation.Citation_system import Source
 from src.config import Config
+from src.db.chroma_client import count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
 
 
@@ -32,7 +33,7 @@ def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
     return out or None
 
 
-def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
+def generate(query: str, bm25_index) -> CitedAnswer:
     """
     genarate citation and answer with llm
     """
@@ -40,7 +41,7 @@ def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
     t0 = monotonic()
 
     if lf is None:
-        return _generate_untraced(query, chunks, bm25_index, t0)
+        return _generate_untraced(query, bm25_index, t0)
 
     from langfuse.langchain import CallbackHandler
 
@@ -55,18 +56,18 @@ def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
             input={
                 "query": query,
                 "top_k": Config.TOP_K_RERANK,
-                "corpus_chunk_count": len(chunks),
+                "corpus_chunk_count": count_chunks(),
             },
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
             with root.start_as_current_observation(
                 name="retrieval",
                 as_type="retriever",
-                input={"query": query, "corpus_chunk_count": len(chunks)},
+                input={"query": query, "corpus_chunk_count": count_chunks()},
             ) as retr:
                 try:
                     top_chunks = retrieval(
-                        query, chunks, bm25_index, lf_retrieval_parent=retr
+                        query, bm25_index, lf_retrieval_parent=retr
                     )
                     logger.debug(f"Retrieved {len(top_chunks)} top chunks")
                     retr.update(output={"chunks_retrieved": len(top_chunks)})
@@ -158,10 +159,10 @@ def generate(query: str, chunks: list[dict], bm25_index) -> CitedAnswer:
 
 
 def _generate_untraced(
-    query: str, chunks: list[dict], bm25_index, t0: float
+    query: str, bm25_index, t0: float
 ) -> CitedAnswer:
     try:
-        top_chunks = retrieval(query, chunks, bm25_index)
+        top_chunks = retrieval(query, bm25_index)
         logger.debug(f"Retrieved {len(top_chunks)} top chunks")
     except Exception as e:
         logger.error(f"Error while retrieving top chunks: {e}")
