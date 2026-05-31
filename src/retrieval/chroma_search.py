@@ -1,29 +1,25 @@
 """
 Description:
-         semantic similarity search using top=k methoad to return top-k most similar results.
+         Semantic similarity search using top-k method to return top-k most similar results.
 """
 
-from typing import List
 from loguru import logger
-from src.ingestion.embedder import embed_query, _get_model
+from src.ingestion.embedder import embed_query
 from src.db.chroma_client import get_collection
 
 
 def vector_search(query: str, top_k: int) -> list[dict]:
     """
-    semantic similrity search in vector stroe .use embed_query function to do embeddin
+    Semantic similarity search in vector store. Uses embed_query to embed the query.
     """
     embeddings = embed_query(query)
 
-    # search in tha vector stre
     collection = get_collection()
     try:
-
         results = collection.query(query_embeddings=[embeddings], n_results=top_k)
-        logger.info("vector search is done ")
-
+        logger.info("Vector search completed")
     except Exception as e:
-        logger.error("there is an errro while vextor search")
+        logger.error(f"Error during vector search: {e}")
         raise RuntimeError("Error while vector search")
 
     chunks = []

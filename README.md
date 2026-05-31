@@ -216,7 +216,7 @@ Tracing identified that the cross-encoder reranker accounts for approximately 72
 
 # Evaluation Results
 
-Evaluated on 15 question-answer pairs from the *Attention Is All You Need* paper using Ragas metrics with Groq LLM as the judge.
+Evaluated on 5 question-answer pairs from the *Attention Is All You Need* paper using Ragas metrics with Groq LLM as the judge.
 
 | Metric | Score | Threshold | Status |
 |---|---|---|---|
