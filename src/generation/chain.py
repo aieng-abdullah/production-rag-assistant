@@ -1,7 +1,4 @@
-"""
-file: chain.py
-This file do retrive top k chunk and generate citation,call llm and genarate citeted answer
-"""
+"""Generate cited answers by combining retrieval, LLM inference, and citation validation."""
 from time import monotonic
 from typing import Any
 
@@ -10,15 +7,14 @@ from langchain_groq import ChatGroq
 from pydantic import ValidationError
 
 from src.retrieval.pipeline import retrieval
-from src.generation.Citation_system import build_citation_prompt
-from src.generation.Citation_system import CitedAnswer
-from src.generation.Citation_system import Source
+from src.generation.Citation_system import build_citation_prompt, CitedAnswer, Source
 from src.config import Config
 from src.db.chroma_client import count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
 
 
 def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
+    """Extract token usage from a LangChain response object."""
     meta = getattr(response, "response_metadata", None) or {}
     usage = meta.get("token_usage") or meta.get("usage")
     if not usage or not isinstance(usage, dict):
@@ -33,20 +29,46 @@ def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
     return out or None
 
 
-def generate(query: str, bm25_index) -> CitedAnswer:
-    """
-    genarate citation and answer with llm
-    """
-    lf = get_langfuse_client()
-    t0 = monotonic()
+def _build_sources(chunks: list[dict]) -> list[Source]:
+    """Convert raw retrieval chunks into Source objects."""
+    return [
+        Source(doc_id=c["doc_id"], page_num=c["page_num"], text=c["text"])
+        for c in chunks
+    ]
 
-    if lf is None:
-        return _generate_untraced(query, bm25_index)
 
+def _invoke_llm(
+    prompt: str, callbacks: list | None = None
+) -> tuple[str, dict[str, int] | None]:
+    """Call the Groq LLM and return (answer_text, token_usage)."""
+    client = ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL)
+    config = {"callbacks": callbacks} if callbacks else {}
+    response = client.invoke(prompt, config=config)
+    return response.content, _usage_from_lc_response(response)
+
+
+def _run_pipeline(query: str, bm25_index) -> CitedAnswer:
+    """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
+    top_chunks = retrieval(query, bm25_index)
+    logger.debug(f"Retrieved {len(top_chunks)} top chunks")
+
+    citation_prompt = build_citation_prompt(query, top_chunks)
+    logger.debug(f"Generated citation prompt: {citation_prompt}")
+
+    answer_text, _ = _invoke_llm(citation_prompt)
+
+    sources = _build_sources(top_chunks)
+    return CitedAnswer(answer=answer_text, sources=sources)
+
+
+def _generate_traced(query: str, bm25_index, lf) -> CitedAnswer:
+    """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
 
     trace_id = lf.create_trace_id()
     trace_context: dict[str, str] = {"trace_id": trace_id}
+
+    t0 = monotonic()
 
     try:
         with lf.start_as_current_observation(
@@ -60,37 +82,26 @@ def generate(query: str, bm25_index) -> CitedAnswer:
             },
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
+            # --- Retrieval ---
             with root.start_as_current_observation(
                 name="retrieval",
                 as_type="retriever",
                 input={"query": query, "corpus_chunk_count": count_chunks()},
             ) as retr:
-                try:
-                    top_chunks = retrieval(
-                        query, bm25_index, lf_retrieval_parent=retr
-                    )
-                    logger.debug(f"Retrieved {len(top_chunks)} top chunks")
-                    retr.update(output={"chunks_retrieved": len(top_chunks)})
-                except Exception as e:
-                    logger.error(f"Error while retrieving top chunks: {e}")
-                    raise RuntimeError(f"Failed to retrieve top chunks: {e}")
+                top_chunks = retrieval(query, bm25_index, lf_retrieval_parent=retr)
+                logger.debug(f"Retrieved {len(top_chunks)} top chunks")
+                retr.update(output={"chunks_retrieved": len(top_chunks)})
 
+            # --- Prompt build ---
             with root.start_as_current_observation(
                 name="prompt-build",
                 as_type="span",
             ) as pb:
-                try:
-                    citation_prompt = build_citation_prompt(query, top_chunks)
-                    logger.debug(f"Generated citation prompt: {citation_prompt}")
-                    pb.update(output={"prompt_chars": len(citation_prompt)})
-                except Exception as e:
-                    logger.error(f"Error while generating citation prompt: {e}")
-                    raise RuntimeError(f"Failed to generate citation prompt: {e}")
+                citation_prompt = build_citation_prompt(query, top_chunks)
+                logger.debug(f"Generated citation prompt: {citation_prompt}")
+                pb.update(output={"prompt_chars": len(citation_prompt)})
 
-            client = ChatGroq(
-                api_key=Config.GROQ_API_KEY,
-                model=Config.GROQ_MODEL,
-            )
+            # --- LLM call ---
             handler = CallbackHandler(
                 public_key=Config.LANGFUSE_PUBLIC_KEY,
                 trace_context=trace_context,
@@ -101,27 +112,14 @@ def generate(query: str, bm25_index) -> CitedAnswer:
                 as_type="span",
                 metadata={"model": Config.GROQ_MODEL},
             ) as llm_span:
-                response = client.invoke(
-                    citation_prompt,
-                    config={"callbacks": [handler]},
-                )
-                answer_text = response.content
-                usage = _usage_from_lc_response(response)
+                answer_text, usage = _invoke_llm(citation_prompt, callbacks=[handler])
                 llm_span.update(
-                    output={
-                        "answer_chars": len(answer_text) if answer_text else 0,
-                    },
+                    output={"answer_chars": len(answer_text) if answer_text else 0},
                     metadata={"token_usage": usage} if usage else None,
                 )
 
-            sources = [
-                Source(
-                    doc_id=chunk["doc_id"],
-                    page_num=chunk["page_num"],
-                    text=chunk["text"],
-                )
-                for chunk in top_chunks
-            ]
+            # --- Citation validation ---
+            sources = _build_sources(top_chunks)
 
             with root.start_as_current_observation(
                 name="citation-validation",
@@ -131,10 +129,7 @@ def generate(query: str, bm25_index) -> CitedAnswer:
                 try:
                     cited = CitedAnswer(answer=answer_text, sources=sources)
                     val_span.update(
-                        output={
-                            "citation_valid": True,
-                            "sources_count": len(sources),
-                        }
+                        output={"citation_valid": True, "sources_count": len(sources)}
                     )
                 except ValidationError as e:
                     val_span.update(
@@ -158,36 +153,9 @@ def generate(query: str, bm25_index) -> CitedAnswer:
         flush_langfuse()
 
 
-def _generate_untraced(
-    query: str, bm25_index
-) -> CitedAnswer:
-    try:
-        top_chunks = retrieval(query, bm25_index)
-        logger.debug(f"Retrieved {len(top_chunks)} top chunks")
-    except Exception as e:
-        logger.error(f"Error while retrieving top chunks: {e}")
-        raise RuntimeError(f"Failed to retrieve top chunks: {e}")
-
-    try:
-        citation_prompt = build_citation_prompt(query, top_chunks)
-        logger.debug(f"Generated citation prompt: {citation_prompt}")
-    except Exception as e:
-        logger.error(f"Error while generating citation prompt: {e}")
-        raise RuntimeError(f"Failed to generate citation prompt: {e}")
-
-    client = ChatGroq(
-        api_key=Config.GROQ_API_KEY,
-        model=Config.GROQ_MODEL,
-    )
-    response = client.invoke(citation_prompt)
-    answer_text = response.content
-
-    sources = [
-        Source(
-            doc_id=chunk["doc_id"],
-            page_num=chunk["page_num"],
-            text=chunk["text"],
-        )
-        for chunk in top_chunks
-    ]
-    return CitedAnswer(answer=answer_text, sources=sources)
+def generate(query: str, bm25_index) -> CitedAnswer:
+    """Generate a cited answer for the given query using the RAG pipeline."""
+    lf = get_langfuse_client()
+    if lf is None:
+        return _run_pipeline(query, bm25_index)
+    return _generate_traced(query, bm25_index, lf)
