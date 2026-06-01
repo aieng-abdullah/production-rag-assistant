@@ -87,9 +87,7 @@ def load_all_chunks() -> List[Dict]:
 
 def has_chunks() -> bool:
     """Check if any chunks exist in the vectorstore without loading them."""
-    vectorstore = _get_vectorstore()
-    collection = vectorstore._collection
-    return collection.count() > 0
+    return count_chunks() > 0
 
 
 def count_chunks() -> int:
