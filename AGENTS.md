@@ -6,10 +6,10 @@
 # Run app
 streamlit run app.py
 
-# Run CI tests (only these 3 files run in GitHub Actions)
-pytest tests/test_config.py tests/test_rrf.py tests/test_citations.py -v
+# Run CI tests (same as GitHub Actions: skips slow embedder tests, enforces 70% coverage)
+pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
 
-# Run all tests
+# Run all tests (including slow embedder tests, no coverage gate)
 pytest tests/ -v
 
 # Run evaluation (requires GROQ_API_KEY + pre-ingested docs in ChromaDB)
@@ -48,9 +48,9 @@ tests/                        # Pytest suite
 
 GitHub Actions (`.github/workflows/eval.yml`) runs on push/PR to `main`:
 1. `pip install -r requirements.txt`
-2. `pytest tests/test_config.py tests/test_rrf.py tests/test_citations.py -v`
+2. `pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70`
 
-Only those 3 test files run in CI. The other test files exist locally but are not CI-gated.
+CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`). Coverage must stay above **70%** or the build fails. Coverage report is printed to the CI log with missing lines highlighted.
 
 ## Docker
 

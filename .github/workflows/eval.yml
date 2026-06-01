@@ -11,18 +11,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           LOG_LEVEL: INFO
-        run: pytest tests/test_config.py tests/test_rrf.py tests/test_citations.py -v
+        run: pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
