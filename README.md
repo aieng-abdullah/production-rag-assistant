@@ -236,9 +236,99 @@ Planned optimizations:
 
 # Observability & Monitoring
 
-Every query is traced end-to-end with Langfuse.
+All requests are traced end-to-end using Langfuse.
 
-Each trace captures:
+141 complete request traces collected across real usage.
+
+---
+
+### Latency Profile
+
+Based on 141 traced requests.
+
+| Metric | Latency | What It Means |
+|--------|---------|---------------|
+| p50 | 1.54s | Most users experience this |
+| p90 | 7.32s | 1 in 10 users waits this long |
+| p95 | 11.09s | 1 in 20 users waits this long |
+| p99 | 14.06s | Worst case observed |
+
+Median experience is 1.54 seconds.
+
+Variance is driven by the cross-encoder reranker, not the LLM.
+
+---
+
+### Component Latency Breakdown
+
+| Component | p50 | p90 | p95 | p99 | Role |
+|-----------|-----|-----|-----|-----|------|
+| Full Request | 1.54s | 7.32s | 11.09s | 14.06s | End-to-end |
+| Retrieval | 0.77s | 6.11s | 10.01s | 12.19s | BM25 + vector + RRF |
+| Rerank | 0.74s | 6.03s | 9.23s | 11.68s | Cross-encoder scoring |
+| ChatGroq (LLM) | 0.57s | 0.93s | 1.19s | 2.52s | Generation |
+| Vector Search | 0.03s | 0.06s | 0.22s | 0.38s | Embedding lookup |
+
+---
+
+### Key Finding: LLM Is Not the Bottleneck
+
+Common assumption: LLM generation drives latency.
+
+What the data shows: LLM contributes only 0.57s at median.
+
+The cross-encoder reranker is the actual bottleneck.
+
+| Component | p50 | p95 | Variance Ratio |
+|-----------|-----|-----|----------------|
+| Rerank | 0.74s | 9.23s | 12x |
+| Retrieval | 0.77s | 10.01s | 13x |
+| ChatGroq | 0.57s | 1.19s | 2x |
+| Vector Search | 0.03s | 0.22s | 7x |
+
+Groq inference is fast and stable — 2x variance between p50 and p95.
+
+The reranker shows 12x variance because the cross-encoder scores every (query, chunk) pair individually on CPU.
+
+Latency scales with document density and query length.
+
+This finding would have been invisible without instrumentation.
+
+Optimizing the LLM — the intuitive target — would have had near zero impact.
+
+---
+
+### Why the Reranker Has High Variance
+
+The cross-encoder reranker scores each (query, chunk) pair individually.
+
+With 20 candidate chunks per query, total compute scales with:
+
+- Query token length
+- Chunk token length
+- Number of candidates
+
+Short query + sparse PDF  → ~0.74s
+
+Long query + dense PDF    → ~9.23s
+
+This is a CPU-bound operation with no batching optimization in the current implementation.
+
+---
+
+### Model Usage
+
+| Model | Tokens Used | Purpose |
+|-------|-------------|---------|
+| llama-3.3-70b-versatile | 96,490 | Primary generation |
+
+Average tokens per trace: ~684 tokens
+
+---
+
+### Trace Structure
+
+Every request is broken into spans:
 
 | Span | What It Tracks |
 |------|---------------|
@@ -246,16 +336,6 @@ Each trace captures:
 | prompt-build | prompt length and construction time |
 | llm-call | token usage, model, response time |
 | citation-validation | pass/fail status |
-
-### Latency Breakdown (from live traces)
-
-| Component | Latency | % of Total |
-|-----------|---------|------------|
-| Cross-Encoder Reranker | ~10s | 72% |
-| Vector Search | ~0.4s | 3% |
-| BM25 Search | ~0.17s | 1% |
-| Groq LLM | ~1.2s | 9% |
-| Other | ~2s | 15% |
 
 Bottleneck identified through Langfuse traces — not guessing.
 
@@ -336,15 +416,9 @@ pytest tests/ -v
 
 # Performance Notes
 
-Current end-to-end latency is approximately 14 seconds.
+End-to-end latency ranges from 1.54s (p50) to 14.06s (p99) across 141 traced requests.
 
-The cross-encoder reranker accounts for roughly 72% of total runtime when executed on CPU.
-
-Potential optimizations:
-
-- GPU deployment
-- Lightweight reranker model
-- Smaller reranking candidate set
+The cross-encoder reranker accounts for 72% of total runtime on CPU with 12x variance between p50 and p95.
 
 Current implementation prioritizes retrieval quality and grounded answers over raw latency.
 
