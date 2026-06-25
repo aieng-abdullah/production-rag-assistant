@@ -6,9 +6,11 @@ from src.generation.chain import (
     _usage_from_lc_response,
     _build_sources,
     _run_pipeline,
+    _invoke_llm,
     generate,
 )
 from src.generation.Citation_system import CitedAnswer, Source
+from src.generation.providers import Provider
 
 
 class TestUsageFromLcResponse:
@@ -192,3 +194,70 @@ class TestGenerate:
         result = generate("query", bm25)
         mock_traced.assert_called_once_with("query", bm25, mock_lf.return_value)
         assert isinstance(result, CitedAnswer)
+
+
+class TestInvokeLlmFailover:
+    """Test the provider failover logic in _invoke_llm."""
+
+    @patch("src.generation.chain.build_provider_chain")
+    @patch("src.generation.chain._call_provider_with_retry")
+    def test_first_provider_succeeds(self, mock_call, mock_chain):
+        mock_chain.return_value = [
+            Provider("groq", "key1", "model1"),
+            Provider("anthropic", "key2", "model2"),
+        ]
+        mock_response = MagicMock()
+        mock_response.content = "answer [SOURCE 1]"
+        mock_response.response_metadata = {}
+        mock_call.return_value = mock_response
+
+        answer, usage = _invoke_llm("prompt")
+        assert answer == "answer [SOURCE 1]"
+        assert mock_call.call_count == 1
+
+    @patch("src.generation.chain.build_provider_chain")
+    @patch("src.generation.chain._call_provider_with_retry")
+    def test_failover_to_second_provider(self, mock_call, mock_chain):
+        mock_chain.return_value = [
+            Provider("groq", "key1", "model1"),
+            Provider("anthropic", "key2", "model2"),
+        ]
+        fail_response = MagicMock()
+        fail_response.content = "fail"
+        fail_response.response_metadata = {}
+
+        success_response = MagicMock()
+        success_response.content = "success [SOURCE 1]"
+        success_response.response_metadata = {}
+
+        mock_call.side_effect = [Exception("Groq down"), success_response]
+
+        answer, usage = _invoke_llm("prompt")
+        assert answer == "success [SOURCE 1]"
+        assert mock_call.call_count == 2
+
+    @patch("src.generation.chain.build_provider_chain")
+    @patch("src.generation.chain._call_provider_with_retry")
+    def test_all_providers_fail_raises(self, mock_call, mock_chain):
+        mock_chain.return_value = [
+            Provider("groq", "key1", "model1"),
+            Provider("anthropic", "key2", "model2"),
+        ]
+        mock_call.side_effect = Exception("provider error")
+
+        with pytest.raises(RuntimeError, match="All LLM providers failed"):
+            _invoke_llm("prompt")
+        assert mock_call.call_count == 2
+
+    @patch("src.generation.chain.build_provider_chain")
+    @patch("src.generation.chain._call_provider_with_retry")
+    def test_single_provider_success(self, mock_call, mock_chain):
+        mock_chain.return_value = [Provider("groq", "key1", "model1")]
+        mock_response = MagicMock()
+        mock_response.content = "answer [SOURCE 1]"
+        mock_response.response_metadata = {}
+        mock_call.return_value = mock_response
+
+        answer, usage = _invoke_llm("prompt")
+        assert answer == "answer [SOURCE 1]"
+        assert mock_call.call_count == 1

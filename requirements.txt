@@ -35,6 +35,9 @@ pytest>=8.3.0
 pytest-cov>=5.0.0
 pytest-asyncio>=0.24.0
 
+# Retry & Resilience
+tenacity>=8.2.0
+
 # Utilities
 datasets>=3.0.0  # Required by ragas
 numpy>=1.26.0

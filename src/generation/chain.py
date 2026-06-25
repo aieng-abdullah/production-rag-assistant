@@ -1,13 +1,21 @@
 """Generate cited answers by combining retrieval, LLM inference, and citation validation."""
+import logging
 from time import monotonic
 from typing import Any
 
 from loguru import logger
-from langchain_groq import ChatGroq
 from pydantic import ValidationError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_log,
+)
 
 from src.retrieval.pipeline import retrieval
 from src.generation.Citation_system import build_citation_prompt, CitedAnswer, Source
+from src.generation.providers import build_provider_chain, create_langchain_client, Provider
 from src.config import Config
 from src.db.chroma_client import count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
@@ -40,11 +48,43 @@ def _build_sources(chunks: list[dict]) -> list[Source]:
 def _invoke_llm(
     prompt: str, callbacks: list | None = None
 ) -> tuple[str, dict[str, int] | None]:
-    """Call the Groq LLM and return (answer_text, token_usage)."""
-    client = ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL)
+    """Call LLM providers with retry + exponential backoff + failover.
+
+    Tries each provider in order (Groq → Anthropic → OpenAI).
+    Each provider gets up to 3 attempts with exponential backoff (1s, 2s, 4s).
+    On failure, logs the error and moves to the next provider.
+    """
+    chain = build_provider_chain()
     config = {"callbacks": callbacks} if callbacks else {}
-    response = client.invoke(prompt, config=config)
-    return response.content, _usage_from_lc_response(response)
+    last_error: Exception | None = None
+
+    for provider in chain:
+        try:
+            logger.info(f"Trying provider: {provider.name} ({provider.model})")
+            response = _call_provider_with_retry(provider, prompt, config)
+            logger.info(f"Provider {provider.name} succeeded")
+            return response.content, _usage_from_lc_response(response)
+        except Exception as e:
+            logger.warning(f"Provider {provider.name} failed after retries: {e}")
+            last_error = e
+            continue
+
+    raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type(Exception),
+    before=before_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _call_provider_with_retry(
+    provider: Provider, prompt: str, config: dict
+):
+    """Call a single provider with retry + exponential backoff."""
+    client = create_langchain_client(provider)
+    return client.invoke(prompt, config=config)
 
 
 def _run_pipeline(query: str, bm25_index) -> CitedAnswer:
