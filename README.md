@@ -30,59 +30,32 @@ Upload research paper PDFs and ask questions with grounded citations and page re
 
 # The Problem It Solves
 
-Reading research papers is slow.
+Academic researchers, engineers, and students read dozens of papers
+to find specific answers — and still leave unsure if they understood
+correctly.
 
-Finding exact information across multiple papers is slower.
+Asking a standard LLM is worse. It gives confident, well-written
+answers that may have nothing to do with what the paper actually says.
+You can't cite a hallucination.
 
-And standard LLMs hallucinate confidently when responses are not grounded in source material.
+**This system lets you query research papers and trust the answers.**
 
-This system solves three core RAG problems.
+Upload one or more PDFs. Ask a specific question. Every response
+comes with exact `[SOURCE N]` citations and page references — grounded
+in what the document actually contains, not what the model assumes.
 
----
-
-> ## Problem 1: Hallucinated Research Facts
->
-> LLMs generate unsupported claims from research papers.
->
-> ### Solution
->
-> Every response is grounded in retrieved chunks with mandatory `[SOURCE N]` citations enforced through Pydantic schema validation.
->
-> If citations are missing, the response is rejected at the validation layer.
+If the source doesn't support the answer, the response is rejected
+before it reaches you.
 
 ---
 
-> ## Problem 2: Weak Retrieval Quality
->
-> Keyword search misses semantic meaning.
->
-> Vector search misses exact terminology.
->
-> ### Solution
->
-> Hybrid BM25 + Vector Retrieval with Reciprocal Rank Fusion (RRF).
->
-> Both retrieval systems run in parallel and ranked results are fused using:
->
-> ```text
-> score = 1 / (k + rank)
-> ```
+### Who it's built for
 
----
-
-> ## Problem 3: No Reliable Evaluation
->
-> Most RAG systems have no measurable quality validation.
->
-> ### Solution
->
-> Automated Ragas evaluation pipeline with:
->
-> - Faithfulness
-> - Answer Relevancy
-> - Context Recall
->
-> GitHub Actions CI blocks merges when evaluation scores drop below threshold.
+| If you are... | This solves... |
+|---|---|
+| A researcher | Cross-paper synthesis without manual skimming |
+| An engineer | Extracting implementation details from technical papers |
+| A student | Citeable answers you can actually reference in writing |
 
 ---
 
