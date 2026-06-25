@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)
-[![Groq](https://img.shields.io/badge/LLM-Groq-orange)](https://groq.com)
+[![Groq](https://img.shields.io/badge/LLM-Groq%20%7C%20Anthropic%20%7C%20OpenAI-orange)](https://groq.com)
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
@@ -102,7 +102,10 @@ Top 5 Chunks
      ↓
 Citation Prompt Builder
      ↓
-Groq LLM (Llama 3.3 70B)
+LLM Provider Chain (with retry + exponential backoff)
+     ├── Groq (Llama 3.3 70B) — free
+     ├── Anthropic (Claude) — optional, user-provided key
+     └── OpenAI (GPT-4o) — optional, user-provided key
      ↓
 Pydantic Citation Validator
      ↓
@@ -341,6 +344,42 @@ Bottleneck identified through Langfuse traces — not guessing.
 
 ---
 
+# LLM Provider Failover
+
+The system supports **3 LLM providers** with automatic retry, exponential backoff, and failover:
+
+| Provider | Model | Cost | Setup |
+|----------|-------|------|-------|
+| **Groq** | Llama 3.3 70B Versatile | Free | Set `GROQ_API_KEY` in `.env` |
+| **Anthropic** | Claude Sonnet 4 | Pay-per-use | Add key via sidebar or set `ANTHROPIC_API_KEY` |
+| **OpenAI** | GPT-4o | Pay-per-use | Add key via sidebar or set `OPENAI_API_KEY` |
+
+### How It Works
+
+1. **Retry**: Each provider gets up to 3 attempts with exponential backoff (1s → 2s → 4s)
+2. **Failover**: If a provider fails after retries, the next provider in the chain is tried
+3. **Chain order**: Groq → Anthropic → OpenAI (only providers with API keys are included)
+
+### Adding Your Own Provider
+
+No code changes needed. Two options:
+
+**Option A — Sidebar UI (recommended):**
+Open the app → expand "LLM Providers" in the sidebar → enter your API key and model name.
+
+**Option B — Environment variables:**
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
+```
+
+If only Groq is configured (default), the system works exactly as before — just with retry resilience.
+
+---
+
 # Technology Stack
 
 | Layer | Technology |
@@ -351,7 +390,7 @@ Bottleneck identified through Langfuse traces — not guessing.
 | Vector Database | ChromaDB |
 | Sparse Retrieval | BM25Retriever |
 | Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| LLM | Groq (Llama 3.3 70B) |
+| LLM | Groq / Anthropic / OpenAI (with retry + failover) |
 | Orchestration | LangChain |
 | UI | Streamlit |
 | Observability | Langfuse |

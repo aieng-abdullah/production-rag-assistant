@@ -55,7 +55,7 @@ class TestConfigValidation:
         original = Config.GROQ_API_KEY
         try:
             Config.GROQ_API_KEY = ""
-            with pytest.raises(EnvironmentError, match="Missing required environment variables"):
+            with pytest.raises(EnvironmentError, match="No LLM provider API key found"):
                 Config.validate()
         finally:
             Config.GROQ_API_KEY = original
