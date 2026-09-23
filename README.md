@@ -12,9 +12,9 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-### Ask research papers questions. Every sentence cites its source. Zero hallucination by design — enforced by schema validation, not prompts.
+### Ask research papers questions. Every sentence cites its source. Zero hallucination by design  enforced by schema validation, not prompts.
 
-Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance — not confident-sounding guesses.
+Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance  not confident-sounding guesses.
 
 **[Try the live demo →](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
 
@@ -333,6 +333,6 @@ Current implementation prioritizes retrieval quality and grounded answers over r
 
 ### Abdullah Al Arif
 
-JR. AI Engineer
+ AI Engineer
 
 [GitHub](https://github.com/aieng-abdullah) · [LinkedIn](https://www.linkedin.com/in/abdullah-al-arif-8b58542a7)
