@@ -12,153 +12,97 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-### Production-grade Retrieval-Augmented Generation system for research papers
+### Ask research papers questions. Every sentence cites its source. Zero hallucination by design  enforced by schema validation, not prompts.
 
-Hybrid Retrieval • Cross-Encoder Reranking • Citation Enforcement • Automated Evaluation
+Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance  not confident-sounding guesses.
+
+**[Try the live demo →](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
 
 ---
 
-## Live Link⚡
+### Why this isn't another RAG demo
 
-[Try the live app](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)
-
-Upload research paper PDFs and ask questions with grounded citations and page references.
+| Differentiator | What most demos do | What this does |
+|---|---|---|
+| **Citation enforcement** | Prompt says "cite sources" | Pydantic validates **every sentence** for `[SOURCE N]`; violations rejected at the validation layer |
+| **Retrieval** | Vector-only | BM25 ∥ vector search → Reciprocal Rank Fusion → cross-encoder rerank |
+| **Latency forensics** | Guess at slowness | Langfuse traces: reranker = **72% of ~14s end-to-end** — measured, not guessed |
 
 </div>
 
 ---
 
-# The Problem It Solves
+## Results (Ragas, n=5 golden set)
 
-Reading research papers is slow.
+Evaluated on 5 question–answer pairs from *Attention Is All You Need* with Groq LLM-as-judge. Source: `results.json`.
 
-Finding exact information across multiple papers is slower.
+| Metric | Score | Threshold | Status |
+|---|---|---|---|
+| Faithfulness | **1.00** | 0.75 | PASS |
+| Answer relevancy | **0.88** | 0.75 | PASS |
+| Context recall | **1.00** | 0.70 | PASS |
+| Context precision | **0.375** | 0.70 | **FAIL** |
 
-And standard LLMs hallucinate confidently when responses are not grounded in source material.
+**Faithfulness 1.00** — every claim grounded in retrieved context; system abstains rather than fabricates.
 
-This system solves three core RAG problems.
+**Answer relevancy 0.88** — grounding prompt sometimes returns "I don't have enough information" instead of guessing. Desired tradeoff.
 
-Zero hallucination achieved through 5-layer anti-hallucination design.
+**Context precision 0.375 (FAIL)** — overlapping academic chunks pull partially relevant context. Planned fix: section-aware metadata filtering. See [Known limitations](#known-limitations).
 
----
-
-> ## Problem 1: Hallucinated Research Facts
->
-> LLMs generate unsupported claims from research papers.
->
-> ### Solution
->
-> Every response is grounded in retrieved chunks with mandatory `[SOURCE N]` citations enforced through Pydantic schema validation.
->
-> If citations are missing, the response is rejected at the validation layer.
+Golden set is intentionally small (n=5) and honest about it. Target: expand to 30–50 verified pairs before tuning further.
 
 ---
 
-> ## Problem 2: Weak Retrieval Quality
->
-> Keyword search misses semantic meaning.
->
-> Vector search misses exact terminology.
->
-> ### Solution
->
-> Hybrid BM25 + Vector Retrieval with Reciprocal Rank Fusion (RRF).
->
-> Both retrieval systems run in parallel and ranked results are fused using:
->
-> ```text
-> score = 1 / (k + rank)
-> ```
+## Architecture
 
----
-
-> ## Problem 3: No Reliable Evaluation
->
-> Most RAG systems have no measurable quality validation.
->
-> ### Solution
->
-> Automated Ragas evaluation pipeline with:
->
-> - Faithfulness
-> - Answer Relevancy
-> - Context Recall
->
-> GitHub Actions CI blocks merges when evaluation scores drop below threshold.
-
----
-
-# Architecture
-
-## Document Processing Pipeline
+### Document processing
 
 ```text
 PDF Upload
     ↓
-PyMuPDF Parser
-    • Page-aware text extraction
-
+PyMuPDF Parser — page-aware extraction
     ↓
-RecursiveCharacterTextSplitter
-    • 256 token chunks
-    • 100 overlap
-
+RecursiveCharacterTextSplitter — 256 character chunks, 100 overlap
     ↓
-HuggingFace Embeddings
-    • sentence-transformers/all-MiniLM-L6-v2
-
+sentence-transformers/all-MiniLM-L6-v2 embeddings
     ↓
-ChromaDB
-    • Vector storage with cosine similarity
+ChromaDB — cosine similarity vector store
 ```
 
----
-
-## Retrieval & Generation Pipeline
+### Retrieval and generation
 
 ```text
 User Query
      ├── BM25 Search (Top 20)
      ├── Vector Search (Top 20)
      ↓
-Reciprocal Rank Fusion (RRF)
+Reciprocal Rank Fusion (score = 1 / (k + rank), k=60)
      ↓
-Cross-Encoder Reranker
-     • ms-marco-MiniLM-L-6-v2
-
+Cross-Encoder Reranker — ms-marco-MiniLM-L-6-v2
      ↓
-Top 5 Chunks
+Top 5 Chunks → Citation Prompt Builder
      ↓
-Citation Prompt Builder
-     • Grounding instructions + chain-of-thought
+Groq LLM — llama-3.1-8b-instant (Config default; override via GROQ_MODEL)
      ↓
-Groq LLM (Llama 3.3 70B)
+Pydantic Citation Validator — per-sentence [SOURCE N] check
      ↓
-Pydantic Citation Validator (per-sentence)
-     ↓
-Final Response with [SOURCE N] Citations
+Final Response with page-level citations
 ```
 
 ---
 
-# Key Technical Decisions
+## Key technical decisions
 
 <details>
-<summary><b>Why hybrid retrieval instead of vector-only retrieval?</b></summary>
+<summary><b>Why hybrid retrieval instead of vector-only?</b></summary>
 
 <br>
 
-BM25 excels at exact keyword matching.
-
-This is critical for technical research terminology such as:
-
-- "scaled dot-product attention"
-- "BLEU score"
-- "LoRA adapters"
+BM25 excels at exact keyword matching — critical for technical terminology like "scaled dot-product attention", "BLEU score", "LoRA adapters".
 
 Vector retrieval handles semantic similarity.
 
-Reciprocal Rank Fusion combines both retrieval systems without requiring score normalization across retrieval methods.
+Reciprocal Rank Fusion combines both without score normalization across heterogeneous retrievers.
 
 </details>
 
@@ -169,13 +113,9 @@ Reciprocal Rank Fusion combines both retrieval systems without requiring score n
 
 <br>
 
-Bi-encoders embed queries and chunks independently.
+Bi-encoders embed query and chunk independently. Cross-encoders score them together — significantly more accurate relevance.
 
-Cross-encoders evaluate the query and chunk together, producing significantly more accurate relevance scoring.
-
-Running cross-encoder inference across all chunks would be computationally expensive.
-
-Instead, reranking is applied only to the top retrieval candidates after RRF fusion.
+Full-corpus cross-encoder inference is too expensive. Rerank only the top RRF candidates instead.
 
 </details>
 
@@ -186,13 +126,9 @@ Instead, reranking is applied only to the top retrieval candidates after RRF fus
 
 <br>
 
-Prompt instructions alone are unreliable.
+Prompt instructions alone are unreliable. The validator checks **every sentence** for valid `[SOURCE N]` patterns. Any uncited sentence rejects the response at the validation layer.
 
-The validator checks every sentence for valid `[SOURCE N]` patterns.
-
-If any sentence lacks a citation, the response is rejected and regenerated.
-
-This prevents partial hallucination where some sentences are cited but others are not.
+This blocks partial hallucination where some sentences are cited and others are not.
 
 </details>
 
@@ -203,226 +139,134 @@ This prevents partial hallucination where some sentences are cited but others ar
 
 <br>
 
-Production AI systems cannot be debugged effectively using logs alone.
+Production AI systems cannot be debugged with logs alone. Langfuse traces retrieval latency, prompt construction, token usage, LLM outputs, and citation validation.
 
-Langfuse traces:
-
-- Retrieval latency
-- Prompt construction
-- Token usage
-- LLM outputs
-- Citation validation
-
-Tracing identified that the cross-encoder reranker accounts for approximately 72% of total latency.
+See [How I found the bottleneck](#how-i-found-the-bottleneck).
 
 </details>
 
 ---
 
-# Anti-Hallucination Design
+## Anti-hallucination design (5 layers)
 
-Five layered techniques eliminate hallucination:
-
-### 1. Tighter Chunking
-
-Reduced chunk size from 350 → 256 tokens with 100 token overlap.
-
-Smaller chunks produce tighter, more focused context — reducing noise that causes the LLM to fabricate.
-
-### 2. Grounding Prompt
-
-The prompt explicitly instructs:
-
-- "ONLY use information from the provided sources."
-- "If sources don't contain enough information, say so."
-- "Cite EVERY factual claim individually with [SOURCE N]."
-
-This forces the LLM to treat the provided context as its sole knowledge source.
-
-### 3. Chain-of-Thought Source Identification
-
-Before answering, the LLM first identifies which sources are relevant to the question.
-
-This reduces confabulation by forcing explicit source reasoning before generation.
-
-### 4. Per-Sentence Citation Validation
-
-Pydantic validator checks that every sentence in the answer contains a `[SOURCE N]` citation.
-
-Previous validation only checked for at least one citation — allowing partial hallucination where one sentence was cited but others were not.
-
-### 5. Graceful Abstention
-
-When sources are insufficient, the LLM says "I don't have enough information" instead of guessing.
-
-This trades answer completeness for accuracy — a deliberate design choice for research-grade trustworthiness.
+1. **Tighter chunking** — 350 → 256 characters, 100 overlap. Tighter context = less noise to fabricate from.
+2. **Grounding prompt** — "ONLY use information from the provided sources." / "If sources don't contain enough information, say so." / cite every factual claim with `[SOURCE N]`.
+3. **Chain-of-thought source identification** — model identifies relevant sources before answering. Explicit source reasoning first; generation second.
+4. **Per-sentence citation validation** — Pydantic rejects any sentence missing `[SOURCE N]`. Previous version only required one citation total — partial hallucination slipped through.
+5. **Graceful abstention** — insufficient sources → "I don't have enough information" instead of guessing. Completeness traded for accuracy.
 
 ---
 
-# Evaluation Results
+## How I found the bottleneck
 
-Evaluated on 15 question-answer pairs from the *Attention Is All You Need* paper using Ragas metrics with Groq LLM as the judge.
+Every query traced end-to-end with Langfuse: retrieval span, prompt-build, llm-call, citation-validation.
 
-| Metric | Score | Threshold | Status |
-|---|---|---|---|
-| Faithfulness | **1.00** | 0.75 | ![PASS](https://img.shields.io/badge/PASS-success) |
-| Answer Relevancy | **0.88** | 0.75 | ![PASS](https://img.shields.io/badge/PASS-success) |
-| Context Recall | **1.00** | 0.70 | ![PASS](https://img.shields.io/badge/PASS-success) |
-
----
-
-### Faithfulness — 1.00
-
-**Zero hallucination.** Every single claim in every generated answer is grounded in retrieved context.
-
-The system refused to answer when sources were insufficient rather than fabricating responses.
-
-This is the result of 5-layer anti-hallucination design (see below).
-
----
-
-### Answer Relevancy — 0.88
-
-Responses directly address the user query with minimal irrelevant output.
-
-Slight decrease from 0.90 because the grounding prompt causes the LLM to sometimes say "I don't have enough information" rather than guess — which is the desired anti-hallucination behavior.
-
----
-
-### Context Recall — 1.00
-
-The retrieval pipeline successfully retrieved all required information for every evaluation query.
-
-No relevant chunks were missed.
-
----
-
-### Known Limitation
-
-Context precision remains lower (0.375) due to overlapping academic chunks retrieving partially relevant context.
-
-Planned optimization: section-aware metadata filtering to improve retrieval precision without sacrificing recall.
-
----
-
-# Observability & Monitoring
-
-Every query is traced end-to-end with Langfuse.
-
-Each trace captures:
-
-| Span | What It Tracks |
-|------|---------------|
-| retrieval | BM25 + vector + RRF + rerank latency |
-| prompt-build | prompt length and construction time |
-| llm-call | token usage, model, response time |
-| citation-validation | pass/fail status |
-
-### Latency Breakdown (from live traces)
-
-| Component | Latency | % of Total |
+| Component | Latency | % of total |
 |-----------|---------|------------|
-| Cross-Encoder Reranker | ~10s | 72% |
-| Vector Search | ~0.4s | 3% |
-| BM25 Search | ~0.17s | 1% |
+| Cross-encoder reranker | ~10s | 72% |
+| Vector search | ~0.4s | 3% |
+| BM25 search | ~0.17s | 1% |
 | Groq LLM | ~1.2s | 9% |
 | Other | ~2s | 15% |
 
-Bottleneck identified through Langfuse traces — not guessing.
+Measured from live traces — not guessed. Current priority: retrieval quality and grounded answers over raw latency. Optimizations on deck: GPU deployment, lighter reranker, smaller rerank candidate set.
 
-# Technology Stack
+---
+
+## Known limitations
+
+| Limitation | Status | Planned fix |
+|---|---|---|
+| Context precision 0.375 (below 0.70 gate) | Open | Section-aware metadata filtering |
+| Eval gate not wired into CI | Open | Run Ragas in `eval.yml`; block merge on threshold breach |
+| Golden set n=5 | Open | Expand to 30–50 verified question–answer pairs |
+| End-to-end latency ~14s (CPU) | Accepted for now | Reranker optimization (see bottleneck section) |
+| Single shared Chroma collection (no multi-tenant isolation) | Open | Per-user collections |
+
+CI currently runs unit tests only. Ragas evaluation runs locally via `python3 eval/eval_runner.py`. The README badge reflects tests, not an automated eval gate.
+
+---
+
+## What I would change
+
+Retrospective if rebuilding with what I know now:
+
+1. **Eval harness first, pipeline second.** Golden set and gates before tuning retrieval. Would have caught context-precision issues earlier.
+2. **Baseline before optimization.** Ship vector-only baseline, score it, then layer hybrid + rerank with measured deltas — not all at once.
+3. **Fix precision before adding features.** Context precision 0.375 was known; section-aware metadata filter should precede any new capability.
+4. **Wire the CI gate on day one.** Claiming an eval gate that doesn't block merges was a documentation-drift bug — this rewrite corrects the claim; next step is making it true.
+5. **Smaller reranker, or GPU, earlier.** 72% of latency in one component is an obvious first target when quality is already at faithfulness 1.00.
+6. **Character vs token wording.** Chunk size is characters (`RecursiveCharacterTextSplitter`), not tokens — earlier README said tokens. Precision in claims matters.
+
+---
+
+## Technology stack
 
 | Layer | Technology |
 |---|---|
-| PDF Parsing | PyMuPDF |
+| PDF parsing | PyMuPDF |
 | Chunking | LangChain RecursiveCharacterTextSplitter |
 | Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Vector Database | ChromaDB |
-| Sparse Retrieval | BM25Retriever |
+| Vector DB | ChromaDB |
+| Sparse retrieval | BM25Retriever |
 | Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| LLM | Groq (Llama 3.3 70B) |
+| LLM | Groq (default `llama-3.1-8b-instant`) |
 | Orchestration | LangChain |
 | UI | Streamlit |
 | Observability | Langfuse |
 | Evaluation | Ragas |
-| CI/CD | GitHub Actions |
+| CI | GitHub Actions |
 
 ---
 
-# Local Setup
-
-<details>
-<summary><b>Setup Instructions</b></summary>
-
-<br>
+## Local setup
 
 ```bash
-# Clone repository
 git clone https://github.com/aieng-abdullah/production-rag-assistant.git
-
-# Move into project
 cd production-rag-assistant
 
-# Create virtual environment
 python3 -m venv venv
-
-# Activate environment
 source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment variables
-cp .env.example .env
+cp .env.example .env   # add GROQ_API_KEY (see note below)
 
-# Add GROQ_API_KEY inside .env
-
-# Start application
 streamlit run app.py
 ```
 
-</details>
+> **Note:** `.env.example` does not exist yet (tracked gap). Until it ships, create `.env` manually with at least `GROQ_API_KEY=...`. Optional: `GROQ_MODEL`, `CHROMA_MODE=local`, `LOG_LEVEL`.
+
+Required env: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
 
 ---
 
-# Running Evaluation
+## Running evaluation
 
 ```bash
 python3 eval/eval_runner.py
 ```
 
-Evaluation results are saved to `results.json`.
+Writes `results.json` (metric scores, thresholds, per-sample outputs).
 
 ---
 
-# Running Tests
+## Running tests
 
 ```bash
 pytest tests/ -v
 ```
 
----
+CI runs `tests/test_config.py`, `tests/test_rrf.py`, `tests/test_citations.py` on every push/PR.
 
-# Performance Notes
-
-Current end-to-end latency is approximately 14 seconds.
-
-The cross-encoder reranker accounts for roughly 72% of total runtime when executed on CPU.
-
-Potential optimizations:
-
-- GPU deployment
-- Lightweight reranker model
-- Smaller reranking candidate set
-
-Current implementation prioritizes retrieval quality and grounded answers over raw latency.
+> Known: `test_config.py` currently asserts stale chunk values (350/75 vs actual 256/100). Tracked fix.
 
 ---
 
-# Author
+## Author
 
-## Abdullah Al Arif
+### Abdullah Al Arif
 
 JR. AI Engineer
 
-[GitHub](https://github.com/aieng-abdullah) • [LinkedIn](www.linkedin.com/in/abdullah-al-arif-8b58542a7)
+[GitHub](https://github.com/aieng-abdullah) · [LinkedIn](https://www.linkedin.com/in/abdullah-al-arif-8b58542a7)
