@@ -37,8 +37,8 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     # --- Retrieval Params ---
-    CHUNK_SIZE = 350
-    CHUNK_OVERLAP = 75
+    CHUNK_SIZE = 256
+    CHUNK_OVERLAP = 100
     TOP_K_RERANK = 5
     RRF_K = 60
 
