@@ -13,7 +13,7 @@ import streamlit as st
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import load_all_chunks
+from src.db.chroma_client import has_chunks, load_all_chunks, count_chunks
 from src.generation.chain import generate
 from src.ingestion.pipeline import ingest
 from src.retrieval.bm25_index import build_bm25_index
@@ -33,12 +33,18 @@ def init_session_state():
     """Initialize session state variables."""
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "chunks" not in st.session_state:
-        st.session_state.chunks = []
     if "bm25_index" not in st.session_state:
         st.session_state.bm25_index = None
     if "ingested_docs" not in st.session_state:
         st.session_state.ingested_docs = []
+    if "anthropic_key" not in st.session_state:
+        st.session_state.anthropic_key = ""
+    if "anthropic_model" not in st.session_state:
+        st.session_state.anthropic_model = "claude-sonnet-4-20250514"
+    if "openai_key" not in st.session_state:
+        st.session_state.openai_key = ""
+    if "openai_model" not in st.session_state:
+        st.session_state.openai_model = "gpt-4o"
 
 
 def save_uploaded_file(uploaded_file) -> Path:
@@ -59,13 +65,13 @@ def process_pdf(file_path: Path):
             result = ingest(str(file_path))
             progress_bar.progress(50)
 
-            # Step 2: Reload chunks
-            st.session_state.chunks = load_all_chunks()
+            # Step 2: Rebuild BM25 index from all chunks
+            chunks = load_all_chunks()
             progress_bar.progress(75)
 
-            # Step 3: Rebuild BM25 index
-            if st.session_state.chunks:
-                st.session_state.bm25_index = build_bm25_index(st.session_state.chunks)
+            # Step 3: Build BM25 index
+            if chunks:
+                st.session_state.bm25_index = build_bm25_index(chunks)
             progress_bar.progress(100)
 
             # Add to ingested docs
@@ -99,15 +105,30 @@ def display_cited_answer(cited_answer):
                 st.text(source.text[:500] + "..." if len(source.text) > 500 else source.text)
 
 
+def _apply_provider_overrides():
+    """Inject provider API keys from sidebar UI into Config."""
+    if st.session_state.get("anthropic_key"):
+        Config.ANTHROPIC_API_KEY = st.session_state.anthropic_key
+    if st.session_state.get("anthropic_model"):
+        Config.ANTHROPIC_MODEL = st.session_state.anthropic_model
+    if st.session_state.get("openai_key"):
+        Config.OPENAI_API_KEY = st.session_state.openai_key
+    if st.session_state.get("openai_model"):
+        Config.OPENAI_MODEL = st.session_state.openai_model
+
+
 def handle_query(query: str):
     """Handle user query and generate response."""
-    if not st.session_state.chunks:
+    if not has_chunks():
         st.warning("⚠️ Please upload a PDF first!")
         return
 
     if st.session_state.bm25_index is None:
         st.warning("⚠️ BM25 index not ready. Please process a PDF first.")
         return
+
+    # Apply any provider keys set via the sidebar UI
+    _apply_provider_overrides()
 
     # Add user message
     st.session_state.messages.append({"role": "user", "content": query})
@@ -118,7 +139,6 @@ def handle_query(query: str):
                 # Generate answer
                 cited_answer = generate(
                     query,
-                    st.session_state.chunks,
                     st.session_state.bm25_index,
                 )
 
@@ -183,12 +203,43 @@ def render_sidebar():
         st.sidebar.info("No documents uploaded yet")
 
     # Stats
-    if st.session_state.chunks:
+    if has_chunks():
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Stats")
-        st.sidebar.text(f"Total chunks: {len(st.session_state.chunks)}")
+        st.sidebar.text(f"Total chunks: {count_chunks()}")
         if st.session_state.bm25_index:
             st.sidebar.text("BM25 index: ✅ Ready")
+
+    # LLM Providers
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### LLM Providers")
+    st.sidebar.caption("Groq is free. Add your own key for other providers:")
+
+    with st.sidebar.expander("Anthropic (optional)"):
+        st.text_input(
+            "API Key",
+            type="password",
+            key="anthropic_key",
+            help="Get your key from console.anthropic.com",
+        )
+        st.text_input(
+            "Model",
+            key="anthropic_model",
+            help="e.g. claude-sonnet-4-20250514, claude-3-5-haiku-20241022",
+        )
+
+    with st.sidebar.expander("OpenAI (optional)"):
+        st.text_input(
+            "API Key",
+            type="password",
+            key="openai_key",
+            help="Get your key from platform.openai.com",
+        )
+        st.text_input(
+            "Model",
+            key="openai_model",
+            help="e.g. gpt-4o, gpt-4o-mini",
+        )
 
 
 def render_chat():
@@ -222,12 +273,11 @@ def main():
     """Main app entry point."""
     init_session_state()
 
-    # Validate config
+    # Validate config — warn but don't stop, user can add keys via sidebar
     try:
         Config.validate()
-    except EnvironmentError as e:
-        st.error(f"⚠️ Configuration Error: {e}")
-        st.stop()
+    except EnvironmentError:
+        st.sidebar.warning("No LLM API keys found in .env. Add one via the sidebar.")
 
     # Render UI
     render_sidebar()

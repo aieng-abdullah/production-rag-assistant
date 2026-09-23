@@ -8,13 +8,13 @@
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)
-[![Groq](https://img.shields.io/badge/LLM-Groq-orange)](https://groq.com)
+[![Groq](https://img.shields.io/badge/LLM-Groq%20%7C%20Anthropic%20%7C%20OpenAI-orange)](https://groq.com)
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-### Ask research papers questions. Every sentence cites its source. Zero hallucination by design  enforced by schema validation, not prompts.
+### Ask research papers questions. Every sentence cites its source. Zero hallucination by design — enforced by schema validation, not prompts.
 
-Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance  not confident-sounding guesses.
+Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance — not confident-sounding guesses.
 
 **[Try the live demo →](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
 
@@ -26,9 +26,20 @@ Built for grad students and researchers drowning in arXiv PDFs who need trustwor
 |---|---|---|
 | **Citation enforcement** | Prompt says "cite sources" | Pydantic validates **every sentence** for `[SOURCE N]`; violations rejected at the validation layer |
 | **Retrieval** | Vector-only | BM25 ∥ vector search → Reciprocal Rank Fusion → cross-encoder rerank |
-| **Latency forensics** | Guess at slowness | Langfuse traces: reranker = **72% of ~14s end-to-end** — measured, not guessed |
+| **Latency forensics** | Guess at slowness | Langfuse traces (n=141): reranker is the bottleneck — measured, not guessed |
+| **Provider resilience** | Single LLM, dies on rate limit | Groq → Anthropic → OpenAI failover with retry + exponential backoff |
 
 </div>
+
+---
+
+### Who it's built for
+
+| If you are... | This solves... |
+|---|---|
+| A researcher | Cross-paper synthesis without manual skimming |
+| An engineer | Extracting implementation details from technical papers |
+| A student | Citeable answers you can actually reference in writing |
 
 ---
 
@@ -82,7 +93,10 @@ Cross-Encoder Reranker — ms-marco-MiniLM-L-6-v2
      ↓
 Top 5 Chunks → Citation Prompt Builder
      ↓
-Groq LLM — llama-3.1-8b-instant (Config default; override via GROQ_MODEL)
+LLM Provider Chain (retry + exponential backoff + failover)
+     ├── Groq (default llama-3.1-8b-instant) — free
+     ├── Anthropic (Claude) — optional, user-provided key
+     └── OpenAI (GPT-4o) — optional, user-provided key
      ↓
 Pydantic Citation Validator — per-sentence [SOURCE N] check
      ↓
@@ -159,17 +173,61 @@ See [How I found the bottleneck](#how-i-found-the-bottleneck).
 
 ## How I found the bottleneck
 
-Every query traced end-to-end with Langfuse: retrieval span, prompt-build, llm-call, citation-validation.
+Every request traced end-to-end with Langfuse. **141 complete traces** collected across real usage.
 
-| Component | Latency | % of total |
-|-----------|---------|------------|
-| Cross-encoder reranker | ~10s | 72% |
-| Vector search | ~0.4s | 3% |
-| BM25 search | ~0.17s | 1% |
-| Groq LLM | ~1.2s | 9% |
-| Other | ~2s | 15% |
+### Latency profile (n=141)
 
-Measured from live traces — not guessed. Current priority: retrieval quality and grounded answers over raw latency. Optimizations on deck: GPU deployment, lighter reranker, smaller rerank candidate set.
+| Metric | Latency | What it means |
+|--------|---------|---------------|
+| p50 | 1.54s | Most users experience this |
+| p90 | 7.32s | 1 in 10 users waits this long |
+| p95 | 11.09s | 1 in 20 users waits this long |
+| p99 | 14.06s | Worst case observed |
+
+### Component breakdown
+
+| Component | p50 | p90 | p95 | p99 | Role |
+|-----------|-----|-----|-----|-----|------|
+| Full request | 1.54s | 7.32s | 11.09s | 14.06s | End-to-end |
+| Retrieval | 0.77s | 6.11s | 10.01s | 12.19s | BM25 + vector + RRF |
+| Rerank | 0.74s | 6.03s | 9.23s | 11.68s | Cross-encoder scoring |
+| ChatGroq (LLM) | 0.57s | 0.93s | 1.19s | 2.52s | Generation |
+| Vector search | 0.03s | 0.06s | 0.22s | 0.38s | Embedding lookup |
+
+### Key finding: the LLM is not the bottleneck
+
+Common assumption: LLM generation drives latency.
+
+Data: LLM contributes only **0.57s at median**. Cross-encoder reranker is the actual bottleneck.
+
+| Component | p50 | p95 | Variance ratio |
+|-----------|-----|-----|----------------|
+| Rerank | 0.74s | 9.23s | 12× |
+| Retrieval | 0.77s | 10.01s | 13× |
+| ChatGroq | 0.57s | 1.19s | 2× |
+| Vector search | 0.03s | 0.22s | 7× |
+
+Groq inference is fast and stable (2× p50→p95). Reranker shows 12× variance because the cross-encoder scores every (query, chunk) pair individually on CPU — no batching.
+
+Optimizing the LLM — the intuitive target — would have had near-zero impact. This finding would have been invisible without instrumentation.
+
+Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation`.
+
+---
+
+## LLM provider failover
+
+| Provider | Model (default) | Cost | Setup |
+|----------|-----------------|------|-------|
+| **Groq** | `llama-3.1-8b-instant` | Free | Set `GROQ_API_KEY` |
+| **Anthropic** | Claude Sonnet 4 | Pay-per-use | Sidebar or `ANTHROPIC_API_KEY` |
+| **OpenAI** | GPT-4o | Pay-per-use | Sidebar or `OPENAI_API_KEY` |
+
+1. **Retry**: up to 3 attempts per provider, exponential backoff (1s → 2s → 4s)
+2. **Failover**: provider fails after retries → next in chain
+3. **Chain order**: Groq → Anthropic → OpenAI (only providers with keys)
+
+**Add a key without code changes:** app sidebar → "LLM Providers" → enter key, or set env vars. Only Groq configured (default) works exactly as before — with retry resilience.
 
 ---
 
@@ -180,10 +238,10 @@ Measured from live traces — not guessed. Current priority: retrieval quality a
 | Context precision 0.375 (below 0.70 gate) | Open | Section-aware metadata filtering |
 | Eval gate not wired into CI | Open | Run Ragas in `eval.yml`; block merge on threshold breach |
 | Golden set n=5 | Open | Expand to 30–50 verified question–answer pairs |
-| End-to-end latency ~14s (CPU) | Accepted for now | Reranker optimization (see bottleneck section) |
+| p95 latency 11.09s (CPU rerank) | Accepted for now | Reranker optimization (see bottleneck section) |
 | Single shared Chroma collection (no multi-tenant isolation) | Open | Per-user collections |
 
-CI currently runs unit tests only. Ragas evaluation runs locally via `python3 eval/eval_runner.py`. The README badge reflects tests, not an automated eval gate.
+CI currently runs unit tests with coverage (≥70%). Ragas evaluation runs locally via `python3 eval/eval_runner.py`. The CI badge reflects tests, not an automated eval gate.
 
 ---
 
@@ -195,7 +253,7 @@ Retrospective if rebuilding with what I know now:
 2. **Baseline before optimization.** Ship vector-only baseline, score it, then layer hybrid + rerank with measured deltas — not all at once.
 3. **Fix precision before adding features.** Context precision 0.375 was known; section-aware metadata filter should precede any new capability.
 4. **Wire the CI gate on day one.** Claiming an eval gate that doesn't block merges was a documentation-drift bug — this rewrite corrects the claim; next step is making it true.
-5. **Smaller reranker, or GPU, earlier.** 72% of latency in one component is an obvious first target when quality is already at faithfulness 1.00.
+5. **Smaller reranker, or GPU, earlier.** Reranker dominates p95 variance (12×) — obvious first target when faithfulness is already 1.00.
 6. **Character vs token wording.** Chunk size is characters (`RecursiveCharacterTextSplitter`), not tokens — earlier README said tokens. Precision in claims matters.
 
 ---
@@ -210,7 +268,7 @@ Retrospective if rebuilding with what I know now:
 | Vector DB | ChromaDB |
 | Sparse retrieval | BM25Retriever |
 | Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| LLM | Groq (default `llama-3.1-8b-instant`) |
+| LLM | Groq / Anthropic / OpenAI (retry + failover) |
 | Orchestration | LangChain |
 | UI | Streamlit |
 | Observability | Langfuse |
@@ -235,9 +293,9 @@ cp .env.example .env   # add GROQ_API_KEY (see note below)
 streamlit run app.py
 ```
 
-> **Note:** `.env.example` does not exist yet (tracked gap). Until it ships, create `.env` manually with at least `GROQ_API_KEY=...`. Optional: `GROQ_MODEL`, `CHROMA_MODE=local`, `LOG_LEVEL`.
+> **Note:** `.env.example` does not exist yet (tracked gap). Until it ships, create `.env` manually with at least `GROQ_API_KEY=...`. Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_MODE=local`, `LOG_LEVEL`.
 
-Required env: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
+Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (env or sidebar).
 
 ---
 
@@ -254,12 +312,20 @@ Writes `results.json` (metric scores, thresholds, per-sample outputs).
 ## Running tests
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
 ```
 
-CI runs `tests/test_config.py`, `tests/test_rrf.py`, `tests/test_citations.py` on every push/PR.
+CI runs the same command on every push/PR.
 
-> Known: `test_config.py` currently asserts stale chunk values (350/75 vs actual 256/100). Tracked fix.
+---
+
+## Performance notes
+
+End-to-end latency: **1.54s p50 → 14.06s p99** across 141 traced requests.
+
+Cross-encoder reranker accounts for the dominant share of tail latency on CPU (12× p50→p95 variance).
+
+Current implementation prioritizes retrieval quality and grounded answers over raw latency.
 
 ---
 

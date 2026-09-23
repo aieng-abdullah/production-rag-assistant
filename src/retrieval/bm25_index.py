@@ -50,7 +50,7 @@ def build_bm25_index(chunks: List[Dict]) -> BM25Retriever:
     return retriever
 
 
-def bm25_search(bm25: BM25Retriever, query: str, chunks: List[Dict], top_k: int) -> List[Dict]:
+def bm25_search(bm25: BM25Retriever, query: str, top_k: int) -> List[Dict]:
     """
     Search the BM25 index using LangChain retriever.
 

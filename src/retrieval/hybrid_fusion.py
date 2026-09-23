@@ -1,10 +1,8 @@
-""" 
-Description: 
-        hybrid fushion method for combining multiple ranked lists of search results (BM25 + Vecto_Search)
-        into a single, optimized ranking,  used to improve Retrieval-Augmented Generation (RAG) pipelines
 """
-from src.retrieval.bm25_index import bm25_search , build_bm25_index
-from src.retrieval.chroma_search import vector_search
+Description:
+        Hybrid fusion method for combining multiple ranked lists of search results (BM25 + Vector Search)
+        into a single, optimized ranking, used to improve Retrieval-Augmented Generation (RAG) pipelines.
+"""
 from loguru import logger
 from typing import List, Dict
 from src.config import Config
