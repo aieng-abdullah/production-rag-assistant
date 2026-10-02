@@ -21,9 +21,10 @@ jobs:
         uses: the-pr-agent/pr-agent@v0.46.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # OpenRouter free router (auto-picks best free model), Groq fallback
-          config.model: "openrouter/free"
-          config.fallback_models: '["groq/llama-3.3-70b-versatile"]'
+          # Code-review picks (cross-provider chain so one provider's 429 doesn't stop reviews)
+          config.model: "openrouter/cohere/north-mini-code:free"
+          config.fallback_models: '["openrouter/nvidia/nemotron-3-super-120b-a12b:free", "groq/llama-3.3-70b-versatile"]'
+          config.model_weak: "openrouter/qwen/qwen3.8-27b:free"
           openrouter__key: ${{ secrets.OPENROUTER_API_KEY }}
           GROQ.KEY: ${{ secrets.GROQ_API_KEY }}
           # Automatic tools on PR events
