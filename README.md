@@ -12,7 +12,7 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-### Ask research papers questions. Every sentence cites its source. Zero hallucination by design — enforced by schema validation, not prompts.
+### Ask research papers questions. Every sentence cites its source — enforced by schema validation, not prompts.
 
 Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance — not confident-sounding guesses.
 
@@ -161,7 +161,7 @@ See [How I found the bottleneck](#how-i-found-the-bottleneck).
 
 ---
 
-## Anti-hallucination design (5 layers)
+## Grounding design (5 layers)
 
 1. **Tighter chunking** — 350 → 256 characters, 100 overlap. Tighter context = less noise to fabricate from.
 2. **Grounding prompt** — "ONLY use information from the provided sources." / "If sources don't contain enough information, say so." / cite every factual claim with `[SOURCE N]`.
