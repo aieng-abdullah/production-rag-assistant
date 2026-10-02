@@ -21,9 +21,10 @@ jobs:
         uses: the-pr-agent/pr-agent@v0.46.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Groq-backed model — reuses existing GROQ_API_KEY repo secret, no new key
-          config.model: "groq/llama-3.3-70b-versatile"
+          # OpenRouter free router (auto-picks best free model), Groq fallback
+          config.model: "openrouter/free"
           config.fallback_models: '["groq/llama-3.3-70b-versatile"]'
+          openrouter__key: ${{ secrets.OPENROUTER_API_KEY }}
           GROQ.KEY: ${{ secrets.GROQ_API_KEY }}
           # Automatic tools on PR events
           github_action_config.auto_review: "true"
