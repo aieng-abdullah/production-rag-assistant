@@ -11,3 +11,12 @@ baseRadius = "8px"
 # Custom menu only — docs/UI_DESIGN.md §2
 [client]
 showSidebarNavigation = false
+# Hide developer chrome (Deploy button, rerun/clear-cache/about menu entries).
+# Only auto|developer|viewer|minimal are valid — anything else raises
+# AttributeError in Config.ToolbarMode and kills every session.
+toolbarMode = "viewer"
+
+# Hide top-bar host items: GitHub, Fork, record-screencast, main menu.
+# Does NOT hide the sidebar expand control, so navigation stays usable.
+[ui]
+hideTopBar = true

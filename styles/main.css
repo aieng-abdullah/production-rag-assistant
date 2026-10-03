@@ -157,3 +157,17 @@ h2,
 h3 {
   letter-spacing: -0.015em;
 }
+
+/* --- Streamlit chrome removal.
+   Primary: .streamlit/config.toml → toolbarMode="viewer" + ui.hideTopBar=true.
+   Those hide the Deploy button, GitHub/Fork host toolbar items, rerun/stop,
+   and the hamburger main menu. This block is belt-and-braces for elements
+   that still mount. Do NOT hide <header> itself — it carries the sidebar
+   expand button, and killing it traps the user with no navigation. */
+#MainMenu,
+[data-testid="stMainMenu"],
+[data-testid="stMainMenuPopover"],
+[data-testid="stAppDeployButton"],
+[data-testid="stToolbarActions"] {
+  display: none !important;
+}
