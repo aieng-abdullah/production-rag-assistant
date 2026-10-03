@@ -179,7 +179,7 @@ class TestGenerate:
         )
         bm25 = MagicMock()
         result = generate("query", bm25)
-        mock_pipeline.assert_called_once_with("query", bm25)
+        mock_pipeline.assert_called_once_with("query", bm25, None)
         assert isinstance(result, CitedAnswer)
 
     @patch("src.generation.chain._generate_traced")
@@ -192,7 +192,7 @@ class TestGenerate:
         )
         bm25 = MagicMock()
         result = generate("query", bm25)
-        mock_traced.assert_called_once_with("query", bm25, mock_lf.return_value)
+        mock_traced.assert_called_once_with("query", bm25, mock_lf.return_value, None)
         assert isinstance(result, CitedAnswer)
 
 

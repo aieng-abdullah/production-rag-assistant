@@ -186,12 +186,14 @@ Users can add provider API keys at runtime through the Streamlit sidebar without
 
 ```python
 # app.py
-def _apply_provider_overrides():
-    if st.session_state.get("anthropic_key"):
-        Config.ANTHROPIC_API_KEY = st.session_state.anthropic_key
+def _ui_provider_overrides() -> ProviderOverrides:
+    return ProviderOverrides(
+        anthropic_api_key=st.session_state.get("anthropic_key", ""),
+        ...
+    )
 ```
 
-This is possible because `Config` is a class with mutable attributes, not a frozen dataclass. The tradeoff is that keys are session-scoped (not persisted across browser sessions).
+Overrides are passed as function arguments down the call chain into `build_provider_chain(overrides)` — `Config` is never mutated at runtime, so one user's sidebar keys can't leak into another session (or into a parallel request). Empty fields fall back to `Config`/`.env` values.
 
 ---
 

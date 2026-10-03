@@ -3,7 +3,12 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.generation.providers import Provider, build_provider_chain, create_langchain_client
+from src.generation.providers import (
+    Provider,
+    ProviderOverrides,
+    build_provider_chain,
+    create_langchain_client,
+)
 
 
 class TestBuildProviderChain:
@@ -58,6 +63,51 @@ class TestBuildProviderChain:
         assert chain[0].name == "groq"
         assert chain[1].name == "anthropic"
         assert chain[2].name == "openai"
+
+
+class TestProviderOverrides:
+    """Request-scoped overrides replace global Config mutation (PR-0)."""
+
+    @patch("src.config.Config.GROQ_API_KEY", "gsk_test")
+    @patch("src.config.Config.GROQ_MODEL", "llama-3.1-8b-instant")
+    @patch("src.config.Config.ANTHROPIC_API_KEY", "")
+    @patch("src.config.Config.ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    @patch("src.config.Config.OPENAI_API_KEY", "")
+    @patch("src.config.Config.OPENAI_MODEL", "gpt-4o")
+    def test_override_key_adds_provider_without_config_mutation(self):
+        overrides = ProviderOverrides(
+            anthropic_api_key="sk-ant_ui",
+            anthropic_model="claude-3-5-haiku-20241022",
+        )
+        chain = build_provider_chain(overrides)
+        assert [p.name for p in chain] == ["groq", "anthropic"]
+        assert chain[1].api_key == "sk-ant_ui"
+        assert chain[1].model == "claude-3-5-haiku-20241022"
+        # Config untouched
+        from src.config import Config
+        assert Config.ANTHROPIC_API_KEY == ""
+
+    @patch("src.config.Config.GROQ_API_KEY", "gsk_test")
+    @patch("src.config.Config.ANTHROPIC_API_KEY", "sk-ant_env")
+    @patch("src.config.Config.ANTHROPIC_MODEL", "claude-env-model")
+    @patch("src.config.Config.OPENAI_API_KEY", "")
+    @patch("src.config.Config.OPENAI_MODEL", "gpt-4o")
+    def test_override_model_wins_over_config_model(self):
+        overrides = ProviderOverrides(anthropic_model="claude-ui-model")
+        chain = build_provider_chain(overrides)
+        anthropic = next(p for p in chain if p.name == "anthropic")
+        assert anthropic.api_key == "sk-ant_env"
+        assert anthropic.model == "claude-ui-model"
+
+    @patch("src.config.Config.GROQ_API_KEY", "gsk_test")
+    @patch("src.config.Config.ANTHROPIC_API_KEY", "")
+    @patch("src.config.Config.ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    @patch("src.config.Config.OPENAI_API_KEY", "")
+    @patch("src.config.Config.OPENAI_MODEL", "gpt-4o")
+    def test_empty_overrides_behave_like_no_overrides(self):
+        with_overrides = build_provider_chain(ProviderOverrides())
+        without_overrides = build_provider_chain()
+        assert with_overrides == without_overrides
 
 
 class TestCreateLangchainClient:

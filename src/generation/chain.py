@@ -15,7 +15,12 @@ from tenacity import (
 
 from src.retrieval.pipeline import retrieval
 from src.generation.Citation_system import build_citation_prompt, CitedAnswer, Source
-from src.generation.providers import build_provider_chain, create_langchain_client, Provider
+from src.generation.providers import (
+    Provider,
+    ProviderOverrides,
+    build_provider_chain,
+    create_langchain_client,
+)
 from src.config import Config
 from src.db.chroma_client import count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
@@ -46,7 +51,9 @@ def _build_sources(chunks: list[dict]) -> list[Source]:
 
 
 def _invoke_llm(
-    prompt: str, callbacks: list | None = None
+    prompt: str,
+    callbacks: list | None = None,
+    provider_overrides: ProviderOverrides | None = None,
 ) -> tuple[str, dict[str, int] | None]:
     """Call LLM providers with retry + exponential backoff + failover.
 
@@ -54,7 +61,7 @@ def _invoke_llm(
     Each provider gets up to 3 attempts with exponential backoff (1s, 2s, 4s).
     On failure, logs the error and moves to the next provider.
     """
-    chain = build_provider_chain()
+    chain = build_provider_chain(provider_overrides)
     config = {"callbacks": callbacks} if callbacks else {}
     last_error: Exception | None = None
 
@@ -87,7 +94,11 @@ def _call_provider_with_retry(
     return client.invoke(prompt, config=config)
 
 
-def _run_pipeline(query: str, bm25_index) -> CitedAnswer:
+def _run_pipeline(
+    query: str,
+    bm25_index,
+    provider_overrides: ProviderOverrides | None = None,
+) -> CitedAnswer:
     """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
     top_chunks = retrieval(query, bm25_index)
     logger.debug(f"Retrieved {len(top_chunks)} top chunks")
@@ -95,13 +106,18 @@ def _run_pipeline(query: str, bm25_index) -> CitedAnswer:
     citation_prompt = build_citation_prompt(query, top_chunks)
     logger.debug(f"Generated citation prompt: {citation_prompt}")
 
-    answer_text, _ = _invoke_llm(citation_prompt)
+    answer_text, _ = _invoke_llm(citation_prompt, provider_overrides=provider_overrides)
 
     sources = _build_sources(top_chunks)
     return CitedAnswer(answer=answer_text, sources=sources)
 
 
-def _generate_traced(query: str, bm25_index, lf) -> CitedAnswer:
+def _generate_traced(
+    query: str,
+    bm25_index,
+    lf,
+    provider_overrides: ProviderOverrides | None = None,
+) -> CitedAnswer:
     """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
 
@@ -152,7 +168,11 @@ def _generate_traced(query: str, bm25_index, lf) -> CitedAnswer:
                 as_type="span",
                 metadata={"model": Config.GROQ_MODEL},
             ) as llm_span:
-                answer_text, usage = _invoke_llm(citation_prompt, callbacks=[handler])
+                answer_text, usage = _invoke_llm(
+                    citation_prompt,
+                    callbacks=[handler],
+                    provider_overrides=provider_overrides,
+                )
                 llm_span.update(
                     output={"answer_chars": len(answer_text) if answer_text else 0},
                     metadata={"token_usage": usage} if usage else None,
@@ -193,9 +213,13 @@ def _generate_traced(query: str, bm25_index, lf) -> CitedAnswer:
         flush_langfuse()
 
 
-def generate(query: str, bm25_index) -> CitedAnswer:
+def generate(
+    query: str,
+    bm25_index,
+    provider_overrides: ProviderOverrides | None = None,
+) -> CitedAnswer:
     """Generate a cited answer for the given query using the RAG pipeline."""
     lf = get_langfuse_client()
     if lf is None:
-        return _run_pipeline(query, bm25_index)
-    return _generate_traced(query, bm25_index, lf)
+        return _run_pipeline(query, bm25_index, provider_overrides)
+    return _generate_traced(query, bm25_index, lf, provider_overrides)
