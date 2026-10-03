@@ -37,3 +37,5 @@ htmlcov/
 
 # ChromaDB persistence
 chroma_data/
+# SQLite app DB (PLAN PR-2a, DATABASE_URL default)
+data/*.db
