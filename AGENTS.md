@@ -54,6 +54,9 @@ CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`
 
 ## Git Hygiene
 
+- **Never push directly to `main`** — branch protection enforces this.
+  Every change goes through a PR branch, even one-line doc fixes.
+
 - Branch names: `type/short-slug` — `feat/`, `fix/`, `chore/`, `ci/`, `docs/`, `refactor/`, `test/`.
 - Commits: Conventional Commits — `type: subject`, lowercase imperative, ≤50 chars.
   Body only when the "why" isn't obvious from the subject (see existing `ci:` commits).

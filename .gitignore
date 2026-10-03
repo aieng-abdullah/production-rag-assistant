@@ -22,6 +22,11 @@ Thumbs.db
 # Logs
 *.log
 
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
 # Streamlit secrets
 .streamlit/secrets.toml
 
