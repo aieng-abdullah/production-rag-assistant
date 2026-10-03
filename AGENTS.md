@@ -75,6 +75,10 @@ CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`
   (commands run + results) · **Screenshots** if UI · **Risk/rollback** if breaking.
 - Keep diffs under ~400 lines; split larger work. PLAN.md breakdown = one PR = one phase.
 - Link the PLAN.md ticket (PR-0…PR-7) when applicable.
+- **No PR before local code review.** Before opening: read your own
+  `git diff main...HEAD` line by line — kill debug prints, dead code,
+  secrets, stray files. CI and PR-Agent review come *after* local
+  self-review, never instead of it.
 - Draft PR = WIP; mark ready before requesting review.
 
 ## Docker
