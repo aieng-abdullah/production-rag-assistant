@@ -52,6 +52,28 @@ GitHub Actions (`.github/workflows/eval.yml`) runs on push/PR to `main`:
 
 CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`). Coverage must stay above **70%** or the build fails. Coverage report is printed to the CI log with missing lines highlighted.
 
+## Git Hygiene
+
+- Branch names: `type/short-slug` — `feat/`, `fix/`, `chore/`, `ci/`, `docs/`, `refactor/`, `test/`.
+- Commits: Conventional Commits — `type: subject`, lowercase imperative, ≤50 chars.
+  Body only when the "why" isn't obvious from the subject (see existing `ci:` commits).
+- One concern per branch. No mixed refactor + feature work.
+- Never commit: `.env`, `data/` outputs, `venv/`, keys/tokens.
+  Pre-push secret scan must be empty:
+  `git log -p | grep -iE "sk-[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{10,}|ghp_[a-zA-Z0-9]{20,}|gsk_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}"`
+- Resolve conflicts inside the feature branch. No `merge:` conflict-fix commits on main.
+- Squash-merge PRs, then delete the head branch. Clean up stale branches after merge.
+- Run the CI test command green locally before push (coverage ≥70 gate).
+
+## PR Structure
+
+- PR title = Conventional Commit (becomes the squash subject on main).
+- Body sections: **What/Why** · **Changes** (bullets) · **Test plan**
+  (commands run + results) · **Screenshots** if UI · **Risk/rollback** if breaking.
+- Keep diffs under ~400 lines; split larger work. PLAN.md breakdown = one PR = one phase.
+- Link the PLAN.md ticket (PR-0…PR-7) when applicable.
+- Draft PR = WIP; mark ready before requesting review.
+
 ## Docker
 
 `docker-compose.yml` runs ChromaDB + the Streamlit app. The app container reads `CHROMA_HOST=chromadb` to connect to the compose service. Locally, `CHROMA_MODE=local` uses persistent file storage.
