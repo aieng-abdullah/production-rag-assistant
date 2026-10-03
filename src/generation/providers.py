@@ -12,11 +12,26 @@ class Provider:
     model: str
 
 
-def build_provider_chain() -> list[Provider]:
+@dataclass
+class ProviderOverrides:
+    """Per-request provider settings (e.g. sidebar-entered keys).
+
+    Passed as function arguments through the call chain — never written
+    to Config. Empty fields fall back to Config values.
+    """
+
+    anthropic_api_key: str = ""
+    anthropic_model: str = ""
+    openai_api_key: str = ""
+    openai_model: str = ""
+
+
+def build_provider_chain(overrides: ProviderOverrides | None = None) -> list[Provider]:
     """Return providers that have API keys configured, in failover order.
 
     Order: Groq (free) → Anthropic → OpenAI.
     Only includes providers whose API key is non-empty.
+    Non-empty `overrides` fields take precedence over Config values.
     """
     from src.config import Config
 
@@ -24,10 +39,16 @@ def build_provider_chain() -> list[Provider]:
 
     if Config.GROQ_API_KEY:
         chain.append(Provider("groq", Config.GROQ_API_KEY, Config.GROQ_MODEL))
-    if Config.ANTHROPIC_API_KEY:
-        chain.append(Provider("anthropic", Config.ANTHROPIC_API_KEY, Config.ANTHROPIC_MODEL))
-    if Config.OPENAI_API_KEY:
-        chain.append(Provider("openai", Config.OPENAI_API_KEY, Config.OPENAI_MODEL))
+
+    anthropic_key = (overrides.anthropic_api_key if overrides else "") or Config.ANTHROPIC_API_KEY
+    anthropic_model = (overrides.anthropic_model if overrides else "") or Config.ANTHROPIC_MODEL
+    if anthropic_key:
+        chain.append(Provider("anthropic", anthropic_key, anthropic_model))
+
+    openai_key = (overrides.openai_api_key if overrides else "") or Config.OPENAI_API_KEY
+    openai_model = (overrides.openai_model if overrides else "") or Config.OPENAI_MODEL
+    if openai_key:
+        chain.append(Provider("openai", openai_key, openai_model))
 
     if not chain:
         raise RuntimeError(
