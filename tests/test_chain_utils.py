@@ -1,5 +1,7 @@
 """Tests for generation chain utility functions."""
 
+from unittest.mock import MagicMock
+
 from src.generation.chain import _usage_from_lc_response, _build_sources
 from src.generation.Citation_system import Source
 
@@ -79,6 +81,3 @@ def test_usage_from_lc_response_usage_not_dict():
     response.response_metadata = {"token_usage": "not_a_dict"}
     result = _usage_from_lc_response(response)
     assert result is None
-
-
-from unittest.mock import MagicMock

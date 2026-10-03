@@ -5,8 +5,6 @@ Implements the specification from streamlit_spec.md:
 - Main area: chat history, citations as expanders, chat input
 """
 
-import os
-import shutil
 from pathlib import Path
 
 import streamlit as st
@@ -103,7 +101,7 @@ def display_cited_answer(cited_answer):
             with st.expander(f"[{i}] {source.doc_id} - Page {source.page_num}"):
                 st.markdown(f"**Document:** `{source.doc_id}`")
                 st.markdown(f"**Page:** {source.page_num}")
-                st.markdown(f"**Text:**")
+                st.markdown("**Text:**")
                 st.text(source.text[:500] + "..." if len(source.text) > 500 else source.text)
 
 
@@ -258,7 +256,7 @@ def render_chat():
                     with st.expander(f"[{i}] {source['doc_id']} - Page {source['page_num']}"):
                         st.markdown(f"**Document:** `{source['doc_id']}`")
                         st.markdown(f"**Page:** {source['page_num']}")
-                        st.markdown(f"**Text:**")
+                        st.markdown("**Text:**")
                         st.text(source["text"][:500] + "..." if len(source["text"]) > 500 else source["text"])
 
     # Chat input

@@ -1,7 +1,7 @@
 """Tests for LLM provider chain, client factory, and retry/failover logic."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.generation.providers import (
     Provider,

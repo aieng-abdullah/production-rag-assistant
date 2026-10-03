@@ -75,7 +75,7 @@ def test_rerank_model_singleton(mock_cls):
     mock_model.predict.return_value = [0.5]
     mock_cls.return_value = mock_model
 
-    from src.retrieval.cross_encoder import rerank, _get_model
+    from src.retrieval.cross_encoder import _get_model
     m1 = _get_model()
     m2 = _get_model()
     assert m1 is m2

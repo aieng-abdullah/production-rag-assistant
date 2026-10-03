@@ -4,7 +4,7 @@
 
 # Production RAG Research Assistant
 
-[![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/eval.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
+[![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)
@@ -241,7 +241,7 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 | p95 latency 11.09s (CPU rerank) | Accepted for now | Reranker optimization (see bottleneck section) |
 | Single shared Chroma collection (no multi-tenant isolation) | Open | Per-user collections |
 
-CI currently runs unit tests with coverage (≥70%). Ragas evaluation runs locally via `python3 eval/eval_runner.py`. The CI badge reflects tests, not an automated eval gate.
+CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. Ragas evaluation runs locally via `python3 eval/eval_runner.py` — the badge reflects lint + tests, not an eval gate.
 
 ---
 
