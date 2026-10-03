@@ -5,6 +5,7 @@ pipeline.py:
 """
 from loguru import logger
 
+from src.db.chroma_client import DEFAULT_TENANT
 from src.retrieval.bm25_index import bm25_search
 from src.retrieval.chroma_search import vector_search
 from src.retrieval.hybrid_fusion import rrf_fusion
@@ -16,6 +17,7 @@ def retrieval(
     bm25_index,
     top_k: int = 5,
     lf_retrieval_parent=None,
+    tenant_id: str = DEFAULT_TENANT,
 ) -> list[dict]:
     """
     Retrieve relevant text chunks from a vector database using embeddings,
@@ -55,7 +57,7 @@ def retrieval(
     try:
         vector_results = _traced_step(
             "vector-search",
-            lambda: vector_search(query, top_k=20),
+            lambda: vector_search(query, top_k=20, tenant_id=tenant_id),
         )
         logger.info(f"Vector search returned {len(vector_results)} results")
 

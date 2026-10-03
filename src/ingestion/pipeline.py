@@ -4,13 +4,13 @@ Ingestion pipeline: PDF parsing → chunking → embedding → storage.
 
 from loguru import logger
 
-from src.db.chroma_client import upsert_chunks
+from src.db.chroma_client import DEFAULT_TENANT, upsert_chunks
 from src.ingestion.chunker import chunk_pages
 from src.ingestion.embedder import embed_chunks
 from src.ingestion.parser import extract_pages
 
 
-def ingest(pdf_path: str) -> dict:
+def ingest(pdf_path: str, tenant_id: str = DEFAULT_TENANT) -> dict:
     """Process a PDF file through the full ingestion pipeline.
 
     Steps:
@@ -52,9 +52,9 @@ def ingest(pdf_path: str) -> dict:
         logger.error(f"Embedding failed: {e}")
         raise RuntimeError(f"Failed to generate embeddings: {e}")
 
-    # Step 4: Store in vector database
+    # Step 4: Store in vector database (tenant-partitioned)
     try:
-        chunk_count = upsert_chunks(embedded_chunks)
+        chunk_count = upsert_chunks(embedded_chunks, tenant_id=tenant_id)
         logger.info(f"Stored {chunk_count} chunks in vector store")
     except Exception as e:
         logger.error(f"Storage failed: {e}")
