@@ -7,7 +7,7 @@
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
-[![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://groundedai-app.streamlit.app/)
 [![Groq](https://img.shields.io/badge/LLM-Groq%20%7C%20Anthropic%20%7C%20OpenAI-orange)](https://groq.com)
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
@@ -16,7 +16,7 @@
 
 Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance — not confident-sounding guesses.
 
-**[Try the live demo →](https://appuction-rag-assistant-hlmgqebzhhynbgpbnnekqw.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
+**[Try the live demo →](https://groundedai-app.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
 
 ---
 

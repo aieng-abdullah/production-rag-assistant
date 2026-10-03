@@ -9,6 +9,8 @@ import os
 
 import streamlit as st
 
+from ui_core import brand_html
+
 AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
 
 _LOGIN = "app.py"
@@ -64,6 +66,7 @@ def logout() -> None:
 
 def menu() -> None:
     """Render the sidebar menu for the current auth state."""
+    st.sidebar.markdown(brand_html(26), unsafe_allow_html=True)
     if AUTH_ENABLED and not st.session_state.get("jwt"):
         unauthenticated_menu()
         return
