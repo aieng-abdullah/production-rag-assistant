@@ -66,3 +66,94 @@
   font-weight: 600;
   font-size: 0.85rem;
 }
+
+/* --- Brand ------------------------------------------------------------- */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.brand .logo-mark,
+.brand svg {
+  flex: 0 0 auto;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.brand-ai {
+  color: #4f46e5;
+}
+
+.brand-center {
+  display: flex;
+  justify-content: center;
+  margin: 1.25rem 0 -0.5rem;
+}
+
+/* Hero verified badge */
+.hero-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  margin-bottom: 0.9rem;
+}
+
+/* --- Aesthetic polish --------------------------------------------------- */
+/* Cards lift gently on hover */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07);
+  border-color: #c7d2fe;
+}
+
+/* Sidebar page links: soft hover pill */
+div[data-testid="stPageLinkContainer"] a {
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+div[data-testid="stPageLinkContainer"] a:hover {
+  background: #eef2ff;
+}
+
+/* Primary actions follow the workspace accent */
+div[data-testid="stButton"] button[kind="primary"],
+div[data-testid="stDownloadButton"] button {
+  transition: filter 0.15s ease;
+}
+
+div[data-testid="stButton"] button[kind="primary"]:hover {
+  filter: brightness(1.08);
+}
+
+/* Chat send button picks up the workspace accent */
+div[data-testid="stChatInput"] button {
+  background: var(--ws-accent);
+  border-color: var(--ws-accent);
+}
+
+div[data-testid="stChatInput"] button:hover {
+  filter: brightness(1.1);
+}
+
+/* Headings slightly tighter */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+}

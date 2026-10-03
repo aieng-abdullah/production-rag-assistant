@@ -10,13 +10,17 @@ No `src.*` imports here (AGENTS.md guardrail).
 import streamlit as st
 
 from menu import AUTH_ENABLED, menu
-from ui_core import init_session_state, load_css, page_config
+from ui_core import init_session_state, load_css, logo_mark, page_config
 
 page_config("Sign in — RAG Research Assistant")
 init_session_state()
 load_css()
 menu()
 
+st.markdown(
+    f'<div class="brand-center">{logo_mark(56)}</div>',
+    unsafe_allow_html=True,
+)
 st.markdown(
     """
 <div class="hero hero-center">

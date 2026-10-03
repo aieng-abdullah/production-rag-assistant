@@ -7,7 +7,7 @@ No `src.*` imports here (AGENTS.md guardrail).
 import streamlit as st
 
 from menu import menu
-from ui_core import init_session_state, load_css, page_config
+from ui_core import brand_html, init_session_state, load_css, page_config
 
 page_config("RAG Research Assistant")
 init_session_state()
@@ -16,8 +16,10 @@ menu()
 
 # --- Hero ---------------------------------------------------------------
 st.markdown(
-    """
+    f"""
 <div class="hero">
+  {brand_html(36)}
+  <span class="hero-badge">Verified answers, page by page</span>
   <h1>Citation-Verified RAG</h1>
   <p>ChatGPT guesses. We verify — every sentence checked against its source,
      with page-level provenance. Legal and Academic workspaces.</p>

@@ -14,7 +14,13 @@ from src.config import Config
 from src.db.chroma_client import count_chunks, has_chunks
 from src.generation.providers import ProviderOverrides
 from src.services import DEFAULT_TENANT, RAGService
-from ui_core import apply_workspace_accent, init_session_state, load_css, page_config
+from ui_core import (
+    apply_workspace_accent,
+    brand_html,
+    init_session_state,
+    load_css,
+    page_config,
+)
 
 DATA_DIR = Path("data/raw")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -112,8 +118,8 @@ def handle_query(query: str) -> None:
 
 
 def render_sidebar() -> None:
-    """Sidebar: workspace switcher, documents, stats, provider keys."""
-    st.sidebar.markdown("**RAG Research Assistant**")
+    """Sidebar: brand, workspace switcher, documents, stats, provider keys."""
+    st.sidebar.markdown(brand_html(24), unsafe_allow_html=True)
     st.sidebar.divider()
 
     # Workspace switcher (spec §5 — accent + toast on change)

@@ -64,6 +64,34 @@ def apply_workspace_accent() -> None:
     )
 
 
+# --- Branding (docs/UI_DESIGN.md §8 — product name TBD, domain = groundedai) ---
+_LOGO_SVG = """<svg class="logo-mark" viewBox="0 0 32 32" width="{size}" height="{size}" aria-label="GroundedAI logo">
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#logo-grad)"/>
+  <path d="M9 17.5l4.5 4.5L23 12.5" stroke="#ffffff" stroke-width="3.2" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+</svg>"""
+
+
+def logo_mark(size: int = 28) -> str:
+    """Return the brand mark SVG at the requested pixel size."""
+    return _LOGO_SVG.format(size=size)
+
+
+def brand_html(size: int = 28) -> str:
+    """Logo + wordmark row for markdown containers."""
+    return (
+        f'<div class="brand">{logo_mark(size)}'
+        '<span class="brand-name">Grounded<span class="brand-ai">AI</span></span>'
+        "</div>"
+    )
+
+
 def page_config(title: str) -> None:
     """Common page config — Material Symbols icon, no emoji (spec §1.6)."""
     st.set_page_config(
