@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Quick Commands
+## Build & Test Entrypoints
 
 ```bash
 # Run app
@@ -19,7 +19,7 @@ pytest tests/ -v
 python3 eval/eval_runner.py
 ```
 
-## Architecture
+## System Architecture
 
 Single-app Streamlit project. No monorepo, no packages.
 
@@ -36,7 +36,7 @@ eval/                         # Ragas evaluation runner
 tests/                        # Pytest suite
 ```
 
-## Key Facts
+## Runtime Invariants
 
 - **Python 3.12** required. `asyncio_mode = auto` in pytest.ini.
 - **GROQ_API_KEY** is the only required env var. App crashes at startup without it.
@@ -47,7 +47,7 @@ tests/                        # Pytest suite
 - **Langfuse** is optional. Traces are skipped silently when keys are absent.
 - **Eval dataset** lives at `data/eval_dataset.json`. Results saved to `results.json`.
 
-## CI Behavior
+## Continuous Integration Contract
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
@@ -57,7 +57,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` are skipped).
 No coverage gate on PRs — keep ≥70% locally with the command above before pushing.
 
-## Git Hygiene
+## Version-Control Hygiene & Branch Discipline
 
 - **Never push directly to `main`** — branch protection enforces this.
   Every change goes through a PR branch, even one-line doc fixes.
@@ -73,20 +73,42 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
 - Squash-merge PRs, then delete the head branch. Clean up stale branches after merge.
 - Run `ruff check src tests app.py eval` + the fast test command green locally before push (keep coverage ≥70%).
 
-## PR Structure
+## Change Review Protocol (PR Contract)
 
 - PR title = Conventional Commit (becomes the squash subject on main).
 - Body sections: **What/Why** · **Changes** (bullets) · **Test plan**
   (commands run + results) · **Screenshots** if UI · **Risk/rollback** if breaking.
 - Keep diffs under ~400 lines; split larger work. PLAN.md breakdown = one PR = one phase.
 - Link the PLAN.md ticket (PR-0…PR-7) when applicable.
+- **No PR before local code review.** Before opening: read your own
+  `git diff main...HEAD` line by line — kill debug prints, dead code,
+  secrets, stray files. CI review comes *after* local self-review, never
+  instead of it.
 - Draft PR = WIP; mark ready before requesting review.
 
-## Docker
+## Software Quality Attributes
+
+- **Scalability:** keep code and architecture modular and scalable.
+- **Modular architecture:** each component is a separate unit with a clear interface.
+- **Clean, readable code:** prioritize clarity over cleverness — code is read more than written.
+- **Production-focused:** handle errors, log meaningfully, fail loudly; every line should be production-ready.
+- **Simple over complex:** if a solution needs more than one abstraction layer, you're overcomplicating it.
+
+## Logging & Error-Handling Contract
+
+- **Structured logging:** `loguru` with context fields — no raw `print` statements.
+- **Log levels:** `ERROR` (needs attention), `WARNING` (degraded state), `INFO` (business events), `DEBUG` (dev detail).
+- **Never swallow exceptions:** every caught error must be logged or re-raised. Silent failures are bugs.
+- **Fail fast on startup:** crash immediately when required env vars are missing (`Config.validate()`).
+- **Graceful degradation:** if a non-critical dependency (Langfuse) is down, log and continue — never block core queries.
+- **Error responses:** return structured error objects to callers — never stack traces or raw exceptions.
+- **Retry with backoff:** exponential backoff for external API calls (Groq failover chain). Don't hammer a failing service.
+
+## Container Orchestration
 
 `docker-compose.yml` runs ChromaDB + the Streamlit app. The app container reads `CHROMA_HOST=chromadb` to connect to the compose service. Locally, `CHROMA_MODE=local` uses persistent file storage.
 
-## Gotchas
+## Operational Pitfalls
 
 - `src/ingestion/embedder.py` loads `all-MiniLM-L6-v2` on CPU. First run downloads the model (~90MB).
 - `src/retrieval/cross_encoder.py` lazily loads the reranker model. First query is slow.
@@ -94,7 +116,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
 - `load_all_chunks()` reads every document from ChromaDB. With large corpora this is expensive.
 - Test files use inconsistent naming: some `test_*.py`, some `*_test.py`. Only `test_*` pattern files are auto-discovered by pytest.
 
-## What NOT to Do
+## Engineering Guardrails (Prohibited Patterns)
 
 - Don't swap the stack (Groq / LangChain / Chroma / Streamlit) without updating the
   PLAN.md **Locked decisions** table first.
