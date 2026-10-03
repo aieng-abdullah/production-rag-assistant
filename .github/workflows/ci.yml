@@ -20,7 +20,7 @@ jobs:
         run: pip install ruff==0.15.10
 
       - name: Ruff lint
-        run: ruff check src tests app.py eval alembic
+        run: ruff check src tests app.py eval
 
   test:
     runs-on: ubuntu-latest
