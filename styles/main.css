@@ -1,0 +1,68 @@
+/* Semantic tokens — docs/UI_DESIGN.md §4.2 */
+:root {
+  --verify: #10b981;
+  --verify-bg: #ecfdf5;
+  --citation: #6366f1;
+  --citation-bg: #eef2ff;
+  --warn: #f59e0b;
+  --error: #ef4444;
+  --border: #e2e8f0;
+  --radius: 8px;
+  --ws-accent: #4f46e5;
+}
+
+[data-workspace="legal"] {
+  --ws-accent: #1e3a5f;
+}
+
+[data-workspace="academic"] {
+  --ws-accent: #0d9488;
+}
+
+/* Landing hero — gradient band (§5 Landing) */
+.hero {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+  margin-bottom: 1.5rem;
+  color: #ffffff;
+}
+
+.hero h1 {
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+}
+
+.hero p {
+  color: #e0e7ff;
+  margin: 0;
+}
+
+/* Verified strip on assistant answers */
+.verify-strip {
+  border-left: 3px solid var(--verify);
+  background: var(--verify-bg);
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius);
+  margin-top: 0.5rem;
+}
+
+/* Login gate hero (centered column layout) */
+.hero-center {
+  text-align: center;
+  padding: 1.75rem 1.5rem;
+}
+
+/* Sidebar account initial */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ws-accent);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
