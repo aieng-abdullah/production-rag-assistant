@@ -110,7 +110,7 @@ Applies to: sidebar active states, chat send button, workspace badge, upload but
 |---|---|---|
 | **Login.py** | `layout="centered"` | logo, title, tagline ("ChatGPT guesses. We verify."), Google button, 3-line FAQ teaser, GitHub link |
 | **1_Landing** | wide | hero (gradient band `#4F46E5→#7C3AED`, CTA→Login), logo cloud (Groq/LangChain/Chroma/Streamlit), 2-col alternating feature rows (Verification, Legal workspace, Academic workspace — screenshot placeholders), demo video slot, pricing cards (`ui.card` ×3, PR-5 activates links), FAQ expanders, contact `st.form` |
-| **2_Chat** | wide, chat-first | sidebar: workspace switcher + doc list; main: `st.chat_message` history, citation expanders headed `[SOURCE N] · doc · p.N` with **verify badge** (PR-4b: claim-level ✓/✗, trace link), `st.chat_input`, footer: latency + trace id |
+| **2_Chat** | wide, chat-first | sidebar: workspace switcher + doc list; main: `st.chat_message` history, citation expanders headed `[SOURCE N] · doc · p.N` with **verify badge** (PR-4b: claim-level pass/fail, trace link), `st.chat_input`, footer: latency + trace id |
 | **3_Documents** | centered | uploader + `st.button(type="primary")`, per-doc row: status chip (processing/done/failed), inline `st.progress` while running, delete button, `st.status` polling loop for `processing → done` flips (toast on flip, see §6) |
 | **4_Dashboard** | wide | `ui.metric_card` ×3 (Queries today/quota, Documents, Plan), 7-day usage chart (`st.bar_chart` v1, lightweight-charts later), answer history table → expandable provenance trace (PR-4b) |
 | **5_Settings** | centered | account (email, sign-out), workspace default, provider keys (dev-only inputs), danger zone: delete account (POST, confirm) |
