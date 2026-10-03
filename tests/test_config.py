@@ -1,7 +1,5 @@
 """Tests for Config class - meaningful validation tests."""
 import pytest
-from pathlib import Path
-from unittest.mock import patch
 
 from src.config import Config
 

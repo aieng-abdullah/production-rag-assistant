@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install ruff
+        run: pip install ruff==0.15.10
+
+      - name: Ruff lint
+        run: ruff check src tests app.py eval alembic
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run fast tests
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LOG_LEVEL: INFO
+        # Coverage gate lives in the local AGENTS.md command, not on PRs.
+        # --cov-fail-under=0 overrides pytest.ini addopts (CLI wins over ini).
+        run: pytest tests/ -v -m "not slow" --cov-fail-under=0

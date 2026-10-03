@@ -3,7 +3,6 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from src.retrieval.pipeline import retrieval
-from src.retrieval.hybrid_fusion import rrf_fusion
 
 
 class TestRetrievalSuccess:

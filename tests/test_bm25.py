@@ -1,5 +1,7 @@
 """Tests for BM25 index module."""
 
+import pytest
+
 from unittest.mock import patch, MagicMock
 from src.retrieval.bm25_index import (
     _chunks_to_documents,
@@ -87,6 +89,3 @@ def test_get_bm25_retriever(mock_bm25_cls):
     mock_bm25_cls.from_documents.return_value = mock_retriever
     result = get_bm25_retriever(chunks, top_k=10)
     assert result is mock_retriever
-
-
-import pytest

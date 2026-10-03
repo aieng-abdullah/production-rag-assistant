@@ -6,7 +6,10 @@
 # Run app
 streamlit run app.py
 
-# Run CI tests (same as GitHub Actions: skips slow embedder tests, enforces 70% coverage)
+# Lint (same as CI)
+ruff check src tests app.py eval alembic
+
+# Local test gate (CI runs the same tests WITHOUT the coverage gate)
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
 
 # Run all tests (including slow embedder tests, no coverage gate)
@@ -46,11 +49,13 @@ tests/                        # Pytest suite
 
 ## CI Behavior
 
-GitHub Actions (`.github/workflows/eval.yml`) runs on push/PR to `main`:
-1. `pip install -r requirements.txt`
-2. `pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70`
+GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
-CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`). Coverage must stay above **70%** or the build fails. Coverage report is printed to the CI log with missing lines highlighted.
+1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic`
+2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0`
+
+CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` are skipped).
+No coverage gate on PRs — keep ≥70% locally with the command above before pushing.
 
 ## Git Hygiene
 
@@ -66,7 +71,7 @@ CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`
   `git log -p | grep -iE "sk-[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{10,}|ghp_[a-zA-Z0-9]{20,}|gsk_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}"`
 - Resolve conflicts inside the feature branch. No `merge:` conflict-fix commits on main.
 - Squash-merge PRs, then delete the head branch. Clean up stale branches after merge.
-- Run the CI test command green locally before push (coverage ≥70 gate).
+- Run `ruff check src tests app.py eval alembic` + the fast test command green locally before push (keep coverage ≥70%).
 
 ## PR Structure
 

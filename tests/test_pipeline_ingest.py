@@ -1,9 +1,8 @@
 """Tests for ingestion pipeline - using real chunk_pages instead of mocking it."""
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.ingestion.pipeline import ingest
-from src.ingestion.chunker import chunk_pages
 
 
 class TestIngestSuccess:
