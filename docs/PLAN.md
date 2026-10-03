@@ -54,18 +54,20 @@ Branch: `fix/saas-service-layer`
 **Hope:** green CI, zero behavior change, Config class immutable at runtime.
 
 ### PR-1 — Tenant-scoped core
-Branch: `feat/tenant-isolation`
-- [ ] `upsert_chunks(tenant_id, ...)` stamps `metadata["tenant_id"]`
-- [ ] `vector_search` / `load_all_chunks` / `count_chunks` filter `where={tenant_id}`
-- [ ] BM25 per-tenant TTL cache (`cachetools`), invalidate on ingest/delete
-- [ ] `collection.delete(where={tenant_id, doc_id})` on document delete
-- [ ] Migration: existing chunks tagged `tenant_id="default"`
-- [ ] **Cross-tenant leak test** (A never reads B) — merge gate
+Branch: `feat/tenant-metadata-scoping`
+- [x] `upsert_chunks(tenant_id, ...)` stamps `metadata["tenant_id"]`
+- [x] `vector_search` / `load_all_chunks` / `count_chunks` filter `where={tenant_id}`
+- [ ] ~~BM25 per-tenant TTL cache~~ → moved to PR-3 (ships with the API that consumes it)
+- [x] `collection.delete(where={tenant_id, doc_id})` on document delete
+- [x] Migration: existing chunks tagged `tenant_id="default"`
+- [x] **Cross-tenant leak test** (A never reads B) — merge gate
 **Hope:** isolation proven by test, perf unchanged (filter is indexed metadata).
 
 ### PR-2 — Data layer + Google auth
-Branch: `feat/auth`
-- [ ] Deps: fastapi uvicorn sqlalchemy alembic authlib pyjwt cachetools httpx
+Split: **PR-2a** `feat/data-layer` (models + Alembic) → **PR-2b** `feat/auth` (endpoints).
+Branch: `feat/data-layer`, `feat/auth`
+- [ ] Deps: fastapi uvicorn sqlalchemy alembic authlib pyjwt httpx
+      (per-PR: sqlalchemy+alembic in 2a; web/auth deps in 2b)
 - [ ] Models: User, Workspace(legal|academic), Document, Answer, AnswerTrace,
       UsageEvent, Subscription
 - [ ] Alembic migrations; SQLite URL override in tests
@@ -76,6 +78,8 @@ Branch: `feat/auth`
 
 ### PR-3 — API endpoints + quotas
 Branch: `feat/api`
+- [ ] BM25 per-tenant TTL cache (`cachetools`), invalidate on ingest/delete
+      (moved from PR-1)
 - [ ] `POST /documents` → save `data/raw/{user_id}/` → bg task → `status=processing`
 - [ ] `GET /documents`, `GET /documents/{id}` (poll), `DELETE /documents/{id}`
 - [ ] `POST /chat` → same response shape as today's app
