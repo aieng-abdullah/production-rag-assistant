@@ -1,0 +1,13 @@
+# Streamlit theme — docs/UI_DESIGN.md §4.1 (Verified Indigo, light-first)
+[theme]
+base = "light"
+primaryColor = "#4F46E5"
+backgroundColor = "#FAFAFA"
+secondaryBackgroundColor = "#F1F5F9"
+textColor = "#0F172A"
+borderColor = "#E2E8F0"
+baseRadius = "8px"
+
+# Custom menu only — docs/UI_DESIGN.md §2
+[client]
+showSidebarNavigation = false
