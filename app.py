@@ -110,10 +110,10 @@ def display_cited_answer(cited_answer):
 def _ui_provider_overrides() -> ProviderOverrides:
     """Read provider keys/models from sidebar UI into a per-request object."""
     return ProviderOverrides(
-        anthropic_api_key=st.session_state.get("anthropic_key", ""),
-        anthropic_model=st.session_state.get("anthropic_model", ""),
-        openai_api_key=st.session_state.get("openai_key", ""),
-        openai_model=st.session_state.get("openai_model", ""),
+        anthropic_api_key=st.session_state.get("anthropic_key", "").strip(),
+        anthropic_model=st.session_state.get("anthropic_model", "").strip(),
+        openai_api_key=st.session_state.get("openai_key", "").strip(),
+        openai_model=st.session_state.get("openai_model", "").strip(),
     )
 
 
