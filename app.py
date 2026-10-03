@@ -134,7 +134,7 @@ def handle_query(query: str):
         with st.spinner("Thinking..."):
             try:
                 # Generate answer
-                cited_answer = rag_service.query(
+                cited_answer = rag_service.generate_answer(
                     tenant_id=DEFAULT_TENANT,
                     query=query,
                     bm25_index=st.session_state.bm25_index,

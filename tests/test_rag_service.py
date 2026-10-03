@@ -1,4 +1,4 @@
-"""Tests for the RAGService application-service facade (PLAN.md PR-0)."""
+"""Tests for the RAGService application-service facade (PLAN.md PR-0 + PR-1)."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -17,12 +17,12 @@ def service():
 
 class TestIngest:
     @patch("src.services.rag_service._ingest_pipeline")
-    def test_delegates_to_pipeline_with_string_path(self, mock_pipeline, service):
+    def test_delegates_to_pipeline_with_tenant(self, mock_pipeline, service):
         mock_pipeline.return_value = {"pages": 3, "chunks": 42}
 
-        result = service.ingest(DEFAULT_TENANT, Path("data/raw/doc.pdf"))
+        result = service.ingest("tenant-a", Path("data/raw/doc.pdf"))
 
-        mock_pipeline.assert_called_once_with("data/raw/doc.pdf")
+        mock_pipeline.assert_called_once_with("data/raw/doc.pdf", tenant_id="tenant-a")
         assert result == {"pages": 3, "chunks": 42}
 
     @patch("src.services.rag_service._ingest_pipeline")
@@ -33,38 +33,45 @@ class TestIngest:
 
         service.ingest("tenant-a", str(pdf))
 
-        mock_pipeline.assert_called_once_with(str(pdf))
+        mock_pipeline.assert_called_once_with(str(pdf), tenant_id="tenant-a")
 
 
-class TestQuery:
+class TestGenerateAnswer:
     @patch("src.services.rag_service.generate")
-    def test_forwards_query_bm25_and_overrides(self, mock_generate, service):
+    def test_forwards_query_bm25_overrides_and_tenant(self, mock_generate, service):
         mock_generate.return_value = CitedAnswer(
             answer="[SOURCE 1]", sources=[Source(doc_id="d1", page_num=1, text="x")]
         )
         bm25 = MagicMock()
         overrides = ProviderOverrides(openai_api_key="sk-test", openai_model="gpt-4o")
 
-        result = service.query(DEFAULT_TENANT, "what is X?", bm25, overrides)
+        result = service.generate_answer(
+            "tenant-a", "what is X?", bm25, overrides
+        )
 
         mock_generate.assert_called_once_with(
-            "what is X?", bm25, provider_overrides=overrides
+            "what is X?",
+            bm25,
+            provider_overrides=overrides,
+            tenant_id="tenant-a",
         )
         assert isinstance(result, CitedAnswer)
 
     @patch("src.services.rag_service.generate")
-    def test_overrides_default_to_none(self, mock_generate, service):
+    def test_defaults_overrides_to_none(self, mock_generate, service):
         mock_generate.return_value = CitedAnswer(answer="[SOURCE 1]", sources=[])
         bm25 = MagicMock()
 
-        service.query(DEFAULT_TENANT, "q", bm25)
+        service.generate_answer(DEFAULT_TENANT, "q", bm25)
 
-        mock_generate.assert_called_once_with("q", bm25, provider_overrides=None)
+        mock_generate.assert_called_once_with(
+            "q", bm25, provider_overrides=None, tenant_id=DEFAULT_TENANT
+        )
 
 
-class TestListDocs:
+class TestListDocuments:
     @patch("src.services.rag_service.get_collection")
-    def test_returns_sorted_distinct_doc_ids(self, mock_get_collection, service):
+    def test_queries_with_tenant_predicate(self, mock_get_collection, service):
         collection = MagicMock()
         collection.get.return_value = {
             "metadatas": [
@@ -77,33 +84,43 @@ class TestListDocs:
         }
         mock_get_collection.return_value = collection
 
-        assert service.list_docs(DEFAULT_TENANT) == ["a.pdf", "b.pdf"]
+        assert service.list_documents("tenant-a") == ["a.pdf", "b.pdf"]
+        collection.get.assert_called_once_with(where={"tenant_id": "tenant-a"})
 
     @patch("src.services.rag_service.get_collection")
-    def test_empty_store_returns_empty_list(self, mock_get_collection, service):
+    def test_empty_tenant_returns_empty_list(self, mock_get_collection, service):
         collection = MagicMock()
         collection.get.return_value = {"metadatas": []}
         mock_get_collection.return_value = collection
 
-        assert service.list_docs(DEFAULT_TENANT) == []
+        assert service.list_documents("tenant-b") == []
+        collection.get.assert_called_once_with(where={"tenant_id": "tenant-b"})
 
 
-class TestDelete:
+class TestDeleteDocument:
     @patch("src.services.rag_service.get_collection")
-    def test_deletes_by_doc_id_where_filter(self, mock_get_collection, service):
+    def test_predicate_requires_tenant_and_doc_match(self, mock_get_collection, service):
         collection = MagicMock()
         mock_get_collection.return_value = collection
 
-        service.delete(DEFAULT_TENANT, "doc.pdf")
+        service.delete_document("tenant-a", "doc.pdf")
 
-        collection.delete.assert_called_once_with(where={"doc_id": "doc.pdf"})
+        collection.delete.assert_called_once_with(
+            where={
+                "$and": [
+                    {"tenant_id": {"$eq": "tenant-a"}},
+                    {"doc_id": {"$eq": "doc.pdf"}},
+                ]
+            }
+        )
 
     @patch("src.services.rag_service.get_collection")
-    def test_tenant_id_is_accepted_but_not_enforced_yet(self, mock_get_collection, service):
-        """PR-1 adds tenant_id to the where filter; until then shared corpus."""
+    def test_tenant_predicate_differs_per_tenant(self, mock_get_collection, service):
+        """B deleting same doc_id must target B's partition only."""
         collection = MagicMock()
         mock_get_collection.return_value = collection
 
-        service.delete("tenant-b", "doc.pdf")
+        service.delete_document("tenant-b", "doc.pdf")
 
-        collection.delete.assert_called_once_with(where={"doc_id": "doc.pdf"})
+        args = collection.delete.call_args.kwargs
+        assert {"$and": [{"tenant_id": {"$eq": "tenant-b"}}, {"doc_id": {"$eq": "doc.pdf"}}]} == args["where"]
