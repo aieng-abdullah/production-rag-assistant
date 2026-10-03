@@ -22,7 +22,7 @@ from src.generation.providers import (
     create_langchain_client,
 )
 from src.config import Config
-from src.db.chroma_client import count_chunks
+from src.db.chroma_client import DEFAULT_TENANT, count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
 
 
@@ -98,9 +98,10 @@ def _run_pipeline(
     query: str,
     bm25_index,
     provider_overrides: ProviderOverrides | None = None,
+    tenant_id: str = DEFAULT_TENANT,
 ) -> CitedAnswer:
     """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
-    top_chunks = retrieval(query, bm25_index)
+    top_chunks = retrieval(query, bm25_index, tenant_id=tenant_id)
     logger.debug(f"Retrieved {len(top_chunks)} top chunks")
 
     citation_prompt = build_citation_prompt(query, top_chunks)
@@ -117,6 +118,7 @@ def _generate_traced(
     bm25_index,
     lf,
     provider_overrides: ProviderOverrides | None = None,
+    tenant_id: str = DEFAULT_TENANT,
 ) -> CitedAnswer:
     """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
@@ -134,7 +136,8 @@ def _generate_traced(
             input={
                 "query": query,
                 "top_k": Config.TOP_K_RERANK,
-                "corpus_chunk_count": count_chunks(),
+                "corpus_chunk_count": count_chunks(tenant_id=tenant_id),
+                "tenant_id": tenant_id,
             },
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
@@ -142,9 +145,9 @@ def _generate_traced(
             with root.start_as_current_observation(
                 name="retrieval",
                 as_type="retriever",
-                input={"query": query, "corpus_chunk_count": count_chunks()},
+                input={"query": query, "corpus_chunk_count": count_chunks(tenant_id=tenant_id)},
             ) as retr:
-                top_chunks = retrieval(query, bm25_index, lf_retrieval_parent=retr)
+                top_chunks = retrieval(query, bm25_index, lf_retrieval_parent=retr, tenant_id=tenant_id)
                 logger.debug(f"Retrieved {len(top_chunks)} top chunks")
                 retr.update(output={"chunks_retrieved": len(top_chunks)})
 
@@ -217,9 +220,10 @@ def generate(
     query: str,
     bm25_index,
     provider_overrides: ProviderOverrides | None = None,
+    tenant_id: str = DEFAULT_TENANT,
 ) -> CitedAnswer:
     """Generate a cited answer for the given query using the RAG pipeline."""
     lf = get_langfuse_client()
     if lf is None:
-        return _run_pipeline(query, bm25_index, provider_overrides)
-    return _generate_traced(query, bm25_index, lf, provider_overrides)
+        return _run_pipeline(query, bm25_index, provider_overrides, tenant_id)
+    return _generate_traced(query, bm25_index, lf, provider_overrides, tenant_id)

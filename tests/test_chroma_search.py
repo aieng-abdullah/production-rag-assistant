@@ -51,3 +51,34 @@ def test_vector_search_calls_embed(mock_embed, mock_get_col):
     from src.retrieval.chroma_search import vector_search
     vector_search("my query", top_k=3)
     mock_embed.assert_called_once_with("my query")
+
+
+@patch("src.retrieval.chroma_search.get_collection")
+@patch("src.retrieval.chroma_search.embed_query")
+def test_vector_search_applies_tenant_predicate(mock_embed, mock_get_col):
+    """PR-1: collection.query must carry where={"tenant_id": ...}."""
+    mock_embed.return_value = [0.1, 0.2, 0.3]
+    mock_collection = MagicMock()
+    mock_collection.query.return_value = {"documents": [[]], "metadatas": [[]]}
+    mock_get_col.return_value = mock_collection
+
+    from src.retrieval.chroma_search import vector_search
+    vector_search("q", top_k=5, tenant_id="tenant-b")
+
+    kwargs = mock_collection.query.call_args.kwargs
+    assert kwargs["where"] == {"tenant_id": "tenant-b"}
+
+
+@patch("src.retrieval.chroma_search.get_collection")
+@patch("src.retrieval.chroma_search.embed_query")
+def test_vector_search_defaults_to_default_tenant(mock_embed, mock_get_col):
+    mock_embed.return_value = [0.1]
+    mock_collection = MagicMock()
+    mock_collection.query.return_value = {"documents": [[]], "metadatas": [[]]}
+    mock_get_col.return_value = mock_collection
+
+    from src.retrieval.chroma_search import vector_search
+    vector_search("q", top_k=5)
+
+    kwargs = mock_collection.query.call_args.kwargs
+    assert kwargs["where"] == {"tenant_id": "default"}
