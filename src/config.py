@@ -18,6 +18,10 @@ class Config:
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
     COLLECTION_NAME = "research_docs"
 
+    # --- Relational DB (users, auth, quotas — PLAN PR-2a) ---
+    # SQLite by default (local dev + tests); set DATABASE_URL to Postgres in prod.
+    DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'data' / 'app.db'}")
+
     # --- Embeddings ---
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

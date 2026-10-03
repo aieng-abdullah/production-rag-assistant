@@ -7,7 +7,7 @@
 streamlit run app.py
 
 # Lint (same as CI)
-ruff check src tests app.py eval
+ruff check src tests app.py eval alembic
 
 # Local test gate (CI runs the same tests WITHOUT the coverage gate)
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
@@ -51,7 +51,7 @@ tests/                        # Pytest suite
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
-1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval`
+1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic`
 2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0`
 
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` are skipped).
@@ -71,7 +71,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
   `git log -p | grep -iE "sk-[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{10,}|ghp_[a-zA-Z0-9]{20,}|gsk_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}"`
 - Resolve conflicts inside the feature branch. No `merge:` conflict-fix commits on main.
 - Squash-merge PRs, then delete the head branch. Clean up stale branches after merge.
-- Run `ruff check src tests app.py eval` + the fast test command green locally before push (keep coverage ≥70%).
+- Run `ruff check src tests app.py eval alembic` + the fast test command green locally before push (keep coverage ≥70%).
 
 ## Change Review Protocol (PR Contract)
 
