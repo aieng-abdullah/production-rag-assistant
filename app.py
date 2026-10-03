@@ -14,13 +14,15 @@ from loguru import logger
 
 from src.config import Config
 from src.db.chroma_client import has_chunks, load_all_chunks, count_chunks
-from src.generation.chain import generate
-from src.ingestion.pipeline import ingest
+from src.generation.providers import ProviderOverrides
 from src.retrieval.bm25_index import build_bm25_index
+from src.services import DEFAULT_TENANT, RAGService
 
 # Constants
 DATA_DIR = Path("data/raw")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+rag_service = RAGService()
 
 st.set_page_config(
     page_title="RAG Research Assistant",
@@ -62,7 +64,7 @@ def process_pdf(file_path: Path):
 
         try:
             # Step 1: Ingest
-            result = ingest(str(file_path))
+            result = rag_service.ingest(DEFAULT_TENANT, file_path)
             progress_bar.progress(50)
 
             # Step 2: Rebuild BM25 index from all chunks
@@ -105,16 +107,14 @@ def display_cited_answer(cited_answer):
                 st.text(source.text[:500] + "..." if len(source.text) > 500 else source.text)
 
 
-def _apply_provider_overrides():
-    """Inject provider API keys from sidebar UI into Config."""
-    if st.session_state.get("anthropic_key"):
-        Config.ANTHROPIC_API_KEY = st.session_state.anthropic_key
-    if st.session_state.get("anthropic_model"):
-        Config.ANTHROPIC_MODEL = st.session_state.anthropic_model
-    if st.session_state.get("openai_key"):
-        Config.OPENAI_API_KEY = st.session_state.openai_key
-    if st.session_state.get("openai_model"):
-        Config.OPENAI_MODEL = st.session_state.openai_model
+def _ui_provider_overrides() -> ProviderOverrides:
+    """Read provider keys/models from sidebar UI into a per-request object."""
+    return ProviderOverrides(
+        anthropic_api_key=st.session_state.get("anthropic_key", ""),
+        anthropic_model=st.session_state.get("anthropic_model", ""),
+        openai_api_key=st.session_state.get("openai_key", ""),
+        openai_model=st.session_state.get("openai_model", ""),
+    )
 
 
 def handle_query(query: str):
@@ -127,9 +127,6 @@ def handle_query(query: str):
         st.warning("⚠️ BM25 index not ready. Please process a PDF first.")
         return
 
-    # Apply any provider keys set via the sidebar UI
-    _apply_provider_overrides()
-
     # Add user message
     st.session_state.messages.append({"role": "user", "content": query})
 
@@ -137,9 +134,11 @@ def handle_query(query: str):
         with st.spinner("Thinking..."):
             try:
                 # Generate answer
-                cited_answer = generate(
-                    query,
-                    st.session_state.bm25_index,
+                cited_answer = rag_service.query(
+                    tenant_id=DEFAULT_TENANT,
+                    query=query,
+                    bm25_index=st.session_state.bm25_index,
+                    provider_overrides=_ui_provider_overrides(),
                 )
 
                 # Display answer with citations
