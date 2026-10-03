@@ -88,3 +88,33 @@ CI runs **all tests** except the slow embedder tests (marked `@pytest.mark.slow`
 - The Streamlit app stores uploaded PDFs in `data/raw/` and rebuilds BM25 on every upload.
 - `load_all_chunks()` reads every document from ChromaDB. With large corpora this is expensive.
 - Test files use inconsistent naming: some `test_*.py`, some `*_test.py`. Only `test_*` pattern files are auto-discovered by pytest.
+
+## What NOT to Do
+
+- Don't swap the stack (Groq / LangChain / Chroma / Streamlit) without updating the
+  PLAN.md **Locked decisions** table first.
+- Don't hardcode workspace-specific logic (legal vs academic) into the pipeline —
+  workspace profiles live in prompt config (PLAN PR-4); the engine stays shared.
+- Don't run irreversible actions (force-push, `git push --delete`, wiping `data/`,
+  resetting ChromaDB, pushing to `main`) without explicit confirmation.
+- Don't polish the Streamlit UI before the underlying service/pipeline is proven by
+  tests — service layer first (PLAN PR-0 → PR-6 order).
+- Don't hardcode API keys or endpoints — env vars via `src/config.py` only.
+- Don't keep long-lived feature branches — rebase on `main` frequently.
+- Don't leave TODO comments without a linked PLAN.md ticket (PR-0…PR-7).
+- Don't write clever one-liners that sacrifice readability.
+- Don't over-engineer — start simple, iterate when constraints demand it.
+- Don't write tests just to "make it pass" — write tests to verify correctness.
+  If the code is good, tests pass automatically. Focus on edge cases, error paths,
+  and failure modes — not happy-path-only green checks.
+- **Never loosen test assertions to pass.** If a test fails, fix the code — not the
+  test. Never change `assert X in result` to `assert X in result or Y in result`.
+  Never skip tests without explicit user request.
+- **Never edit `.env` / `.env.*` without explanation first.** Before touching one you
+  MUST tell the user: (1) which variable, (2) current value, (3) new value,
+  (4) why. Wait for explicit approval.
+- **Never make cosmetic changes to pass time.** No import reordering, no refactoring
+  working code, no `try/except` → `contextlib.suppress` swaps unless the user asks.
+  Every change must have a functional purpose.
+- Don't add new direct `src.*` imports to `app.py` — go through `RAGService`;
+  `src/` stays framework-free (no Streamlit imports below `app.py`).
