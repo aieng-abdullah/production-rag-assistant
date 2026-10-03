@@ -45,12 +45,12 @@ FastAPI ├── /auth       Google OAuth → JWT
 
 ### PR-0 — Landmine removal + service layer
 Branch: `fix/saas-service-layer`
-- [ ] Remove `_apply_provider_overrides()` global Config mutation (app.py:108)
+- [x] Remove `_apply_provider_overrides()` global Config mutation (app.py:108)
       → request-scoped provider config (function args only)
-- [ ] Extract `src/services/rag_service.py`: `ingest(tenant_id, path)`,
+- [x] Extract `src/services/rag_service.py`: `ingest(tenant_id, path)`,
       `query(tenant_id, q, bm25)`, `list_docs(tenant_id)`, `delete(tenant_id, doc_id)`
-- [ ] `app.py` refactored to call RAGService (behavior unchanged)
-- [ ] All existing 20 test files pass — refactor proven
+- [x] `app.py` refactored to call RAGService (behavior unchanged)
+- [x] All existing 20 test files pass — refactor proven
 **Hope:** green CI, zero behavior change, Config class immutable at runtime.
 
 ### PR-1 — Tenant-scoped core
