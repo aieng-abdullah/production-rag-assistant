@@ -4,13 +4,18 @@ Ingestion pipeline: PDF parsing → chunking → embedding → storage.
 
 from loguru import logger
 
+from src.config import Config
 from src.db.chroma_client import DEFAULT_TENANT, upsert_chunks
 from src.ingestion.chunker import chunk_pages
 from src.ingestion.embedder import embed_chunks
 from src.ingestion.parser import extract_pages
 
 
-def ingest(pdf_path: str, tenant_id: str = DEFAULT_TENANT) -> dict:
+def ingest(
+    pdf_path: str,
+    tenant_id: str = DEFAULT_TENANT,
+    workspace: str = Config.DEFAULT_WORKSPACE,
+) -> dict:
     """Process a PDF file through the full ingestion pipeline.
 
     Steps:
@@ -18,6 +23,9 @@ def ingest(pdf_path: str, tenant_id: str = DEFAULT_TENANT) -> dict:
         2. Split pages into chunks
         3. Generate embeddings for chunks
         4. Store chunks in vector database
+
+    `workspace` is stamped on every chunk metadata (legal | academic) so
+    retrieval can filter by niche (PLAN PR-4).
     """
     # Step 1: Extract pages from PDF
     try:
@@ -36,7 +44,9 @@ def ingest(pdf_path: str, tenant_id: str = DEFAULT_TENANT) -> dict:
     # Step 2: Chunk pages
     try:
         chunks = chunk_pages(pages)
-        logger.info(f"Created {len(chunks)} chunks")
+        for chunk in chunks:
+            chunk["workspace"] = workspace
+        logger.info(f"Created {len(chunks)} chunks (workspace={workspace})")
     except Exception as e:
         logger.error(f"Chunking failed: {e}")
         raise RuntimeError(f"Failed to chunk pages: {e}")

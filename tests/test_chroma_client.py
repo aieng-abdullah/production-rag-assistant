@@ -198,6 +198,30 @@ def test_load_all_chunks_applies_tenant_predicate(mock_embed, mock_chroma):
 
 @patch("src.db.chroma_client.Chroma")
 @patch("src.db.chroma_client.get_embedding_model")
+def test_load_all_chunks_adds_workspace_predicate(mock_embed, mock_chroma):
+    """PR-4: load_all_chunks(tenant, workspace) filters both keys."""
+    mock_vs = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {"documents": [], "metadatas": []}
+    mock_vs._collection = mock_collection
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+    from src.db.chroma_client import load_all_chunks
+
+    load_all_chunks(tenant_id="tenant-b", workspace="legal")
+
+    mock_collection.get.assert_called_with(
+        where={
+            "$and": [
+                {"tenant_id": {"$eq": "tenant-b"}},
+                {"workspace": {"$eq": "legal"}},
+            ]
+        }
+    )
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
 def test_count_chunks_applies_tenant_predicate(mock_embed, mock_chroma):
     mock_vs = MagicMock()
     mock_collection = MagicMock()
@@ -221,7 +245,12 @@ def test_backfill_tags_legacy_chunks_missing_tenant_key(mock_embed, mock_chroma)
         "ids": ["legacy1", "tagged1"],
         "metadatas": [
             {"doc_id": "d1", "chunk_index": 0},
-            {"doc_id": "d2", "chunk_index": 1, "tenant_id": "tenant-a"},
+            {
+                "doc_id": "d2",
+                "chunk_index": 1,
+                "tenant_id": "tenant-a",
+                "workspace": "academic",
+            },
         ],
     }
     mock_vs._collection = mock_collection
@@ -233,7 +262,14 @@ def test_backfill_tags_legacy_chunks_missing_tenant_key(mock_embed, mock_chroma)
 
     mock_collection.update.assert_called_once_with(
         ids=["legacy1"],
-        metadatas=[{"doc_id": "d1", "chunk_index": 0, "tenant_id": "default"}],
+        metadatas=[
+            {
+                "doc_id": "d1",
+                "chunk_index": 0,
+                "tenant_id": "default",
+                "workspace": "academic",
+            }
+        ],
     )
 
 
@@ -244,7 +280,9 @@ def test_backfill_noop_when_all_chunks_tagged(mock_embed, mock_chroma):
     mock_collection = MagicMock()
     mock_collection.get.return_value = {
         "ids": ["t1"],
-        "metadatas": [{"doc_id": "d1", "tenant_id": "default"}],
+        "metadatas": [
+            {"doc_id": "d1", "tenant_id": "default", "workspace": "academic"}
+        ],
     }
     mock_vs._collection = mock_collection
     mock_chroma.return_value = mock_vs
@@ -254,3 +292,28 @@ def test_backfill_noop_when_all_chunks_tagged(mock_embed, mock_chroma):
     _get_vectorstore()
 
     mock_collection.update.assert_not_called()
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
+def test_backfill_stamps_workspace_when_only_tenant_tagged(mock_embed, mock_chroma):
+    """Pre-PR-4 chunks have tenant_id but no workspace key (PLAN PR-4)."""
+    mock_vs = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {
+        "ids": ["t1"],
+        "metadatas": [{"doc_id": "d1", "tenant_id": "tenant-a"}],
+    }
+    mock_vs._collection = mock_collection
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+
+    from src.db.chroma_client import _get_vectorstore
+    _get_vectorstore()
+
+    mock_collection.update.assert_called_once_with(
+        ids=["t1"],
+        metadatas=[
+            {"doc_id": "d1", "tenant_id": "tenant-a", "workspace": "academic"}
+        ],
+    )

@@ -22,7 +22,9 @@ class TestIngest:
 
         result = service.ingest("tenant-a", Path("data/raw/doc.pdf"))
 
-        mock_pipeline.assert_called_once_with("data/raw/doc.pdf", tenant_id="tenant-a")
+        mock_pipeline.assert_called_once_with(
+            "data/raw/doc.pdf", tenant_id="tenant-a", workspace="academic"
+        )
         assert result == {"pages": 3, "chunks": 42}
 
     @patch("src.services.rag_service._ingest_pipeline")
@@ -33,7 +35,9 @@ class TestIngest:
 
         service.ingest("tenant-a", str(pdf))
 
-        mock_pipeline.assert_called_once_with(str(pdf), tenant_id="tenant-a")
+        mock_pipeline.assert_called_once_with(
+            str(pdf), tenant_id="tenant-a", workspace="academic"
+        )
 
 
 class TestGenerateAnswer:
@@ -54,6 +58,7 @@ class TestGenerateAnswer:
             bm25,
             provider_overrides=overrides,
             tenant_id="tenant-a",
+            workspace="academic",
         )
         assert isinstance(result, CitedAnswer)
 
@@ -65,7 +70,8 @@ class TestGenerateAnswer:
         service.generate_answer(DEFAULT_TENANT, "q", bm25)
 
         mock_generate.assert_called_once_with(
-            "q", bm25, provider_overrides=None, tenant_id=DEFAULT_TENANT
+            "q", bm25, provider_overrides=None, tenant_id=DEFAULT_TENANT,
+            workspace="academic",
         )
 
 

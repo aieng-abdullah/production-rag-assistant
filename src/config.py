@@ -59,6 +59,10 @@ class Config:
     TOP_K_RERANK = 5
     RRF_K = 60
 
+    # --- Workspaces (PLAN PR-4): two niches, one engine ---
+    WORKSPACES = ("legal", "academic")
+    DEFAULT_WORKSPACE = "academic"
+
     # --- Evaluation ---
     FAITHFULNESS_THRESHOLD = 0.80
     ANSWER_RELEVANCY_THRESHOLD = 0.80

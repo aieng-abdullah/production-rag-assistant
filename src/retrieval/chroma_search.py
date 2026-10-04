@@ -5,13 +5,19 @@ Description:
 
 from loguru import logger
 from src.ingestion.embedder import embed_query
-from src.db.chroma_client import DEFAULT_TENANT, get_collection
+from src.db.chroma_client import DEFAULT_TENANT, get_collection, metadata_where
 
 
-def vector_search(query: str, top_k: int, tenant_id: str = DEFAULT_TENANT) -> list[dict]:
+def vector_search(
+    query: str,
+    top_k: int,
+    tenant_id: str = DEFAULT_TENANT,
+    workspace: str | None = None,
+) -> list[dict]:
     """
     Semantic similarity search in vector store. Uses embed_query to embed the query.
-    Scoped to one tenant via the `tenant_id` metadata predicate.
+    Scoped to one tenant via the `tenant_id` metadata predicate; optional
+    `workspace` narrows it to one niche's documents (PLAN PR-4).
     """
     embeddings = embed_query(query)
 
@@ -20,7 +26,7 @@ def vector_search(query: str, top_k: int, tenant_id: str = DEFAULT_TENANT) -> li
         results = collection.query(
             query_embeddings=[embeddings],
             n_results=top_k,
-            where={"tenant_id": tenant_id},
+            where=metadata_where(tenant_id, workspace),
         )
         logger.info("Vector search completed")
     except Exception as e:

@@ -82,3 +82,24 @@ def test_vector_search_defaults_to_default_tenant(mock_embed, mock_get_col):
 
     kwargs = mock_collection.query.call_args.kwargs
     assert kwargs["where"] == {"tenant_id": "default"}
+
+
+@patch("src.retrieval.chroma_search.get_collection")
+@patch("src.retrieval.chroma_search.embed_query")
+def test_vector_search_adds_workspace_predicate(mock_embed, mock_get_col):
+    """PR-4: workspace narrows the tenant predicate to one niche."""
+    mock_embed.return_value = [0.1]
+    mock_collection = MagicMock()
+    mock_collection.query.return_value = {"documents": [[]], "metadatas": [[]]}
+    mock_get_col.return_value = mock_collection
+
+    from src.retrieval.chroma_search import vector_search
+    vector_search("q", top_k=5, tenant_id="tenant-b", workspace="legal")
+
+    kwargs = mock_collection.query.call_args.kwargs
+    assert kwargs["where"] == {
+        "$and": [
+            {"tenant_id": {"$eq": "tenant-b"}},
+            {"workspace": {"$eq": "legal"}},
+        ]
+    }
