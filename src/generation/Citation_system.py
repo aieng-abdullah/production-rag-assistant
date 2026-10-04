@@ -15,9 +15,52 @@ from src.generation.profiles import get_system_prompt
 
 
 class Source(BaseModel):
+    """Cited source with provenance (PLAN PR-4b-iv).
+
+    `source_id` is assigned server-side from retrieval rank — the model
+    only echoes it back inside claim citations, never invents it."""
+
     doc_id: str
     page_num: int
     text: str
+    source_id: int = 0
+    pinpoint: dict = {}
+    content_hash: str = ""
+    provenance: dict = {}
+
+
+_SECTION_RE = re.compile(r"\bSection\s+(\d+[A-Z]?(?:\([^)]*\))?)", re.IGNORECASE)
+
+
+def build_source(chunk: dict, source_id: int) -> Source:
+    """Resolve a retrieval chunk into a Source with pinpoint + provenance.
+
+    Pinpoint: page from page_num, paragraph from the chunk's ordinal on
+    that page (chunks are paragraph-aligned by the splitter's `\\n\\n`
+    separator), section from the first `Section N` mention in the text."""
+    section_match = _SECTION_RE.search(chunk.get("text", "") or "")
+    return Source(
+        doc_id=chunk.get("doc_id", ""),
+        page_num=int(chunk.get("page_num", -1)),
+        text=chunk.get("text", ""),
+        source_id=source_id,
+        pinpoint={
+            "page": int(chunk.get("page_num", -1)),
+            "paragraph": int(chunk.get("chunk_index_in_page", -1)),
+            "section": (
+                f"Section {section_match.group(1)}" if section_match else None
+            ),
+        },
+        content_hash=chunk.get("content_hash", ""),
+        provenance={
+            "filename": chunk.get("filename", ""),
+            "doc_date": chunk.get("doc_date", ""),
+            "doc_version": chunk.get("doc_version", ""),
+            "jurisdiction": chunk.get("jurisdiction", ""),
+            "doc_hash": chunk.get("doc_hash", ""),
+            "ingested_at": chunk.get("ingested_at", ""),
+        },
+    )
 
 
 class CitedAnswer(BaseModel):

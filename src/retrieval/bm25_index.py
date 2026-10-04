@@ -8,32 +8,44 @@ from loguru import logger
 
 
 def _chunks_to_documents(chunks: List[Dict]) -> List[Document]:
-    """Convert chunk dictionaries to LangChain Documents."""
+    """Convert chunk dictionaries to LangChain Documents.
+
+    Full metadata passes through (provenance keys included — PR-4b-iv);
+    `source: bm25` marks the retrieval channel."""
     return [
         Document(
             page_content=chunk["text"],
             metadata={
-                    "doc_id": chunk.get("doc_id", "unknown"),
-                    "page_num": chunk.get("page_num", -1),
-                    "chunk_index": chunk.get("chunk_index", -1),
-                    "chunk_id": chunk.get("chunk_id", f"{chunk.get('doc_id')}_chunk_{chunk.get('chunk_index')}"),
-                    "source": "bm25",
-            }
+                "doc_id": chunk.get("doc_id", "unknown"),
+                "page_num": chunk.get("page_num", -1),
+                "chunk_index": chunk.get("chunk_index", -1),
+                "chunk_id": chunk.get(
+                    "chunk_id",
+                    f"{chunk.get('doc_id', 'unknown')}_chunk_{chunk.get('chunk_index', -1)}",
+                ),
+                **{key: value for key, value in chunk.items() if key != "text"},
+                "source": "bm25",
+            },
         )
         for chunk in chunks
     ]
 
 
 def _documents_to_chunks(documents: List[Document]) -> List[Dict]:
-    """Convert LangChain Documents back to chunk dictionaries."""
+    """Convert LangChain documents back to chunk dictionaries."""
     return [
         {
-             "text": doc.page_content,
-             "doc_id": doc.metadata.get("doc_id", "unknown"),
-             "page_num": doc.metadata.get("page_num", -1),
-             "chunk_index": doc.metadata.get("chunk_index", -1),
-             "chunk_id": f"{doc.metadata.get('doc_id', 'unknown')}_chunk_{doc.metadata.get('chunk_index', -1)}",
-             "source": "bm25",
+            "text": doc.page_content,
+            "doc_id": doc.metadata.get("doc_id", "unknown"),
+            "page_num": doc.metadata.get("page_num", -1),
+            "chunk_index": doc.metadata.get("chunk_index", -1),
+            "chunk_id": f"{doc.metadata.get('doc_id', 'unknown')}_chunk_{doc.metadata.get('chunk_index', -1)}",
+            **{
+                key: value
+                for key, value in doc.metadata.items()
+                if key != "source"
+            },
+            "source": "bm25",
         }
         for doc in documents
     ]

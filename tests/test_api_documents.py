@@ -92,7 +92,7 @@ def test_upload_rejects_non_pdf_extension(client, headers):
 
 
 def test_upload_sanitizes_traversal_path(client, headers, api, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None, provenance=None: None)
 
     response = _upload(client, headers, name="sub/../../evil report.pdf")
 
@@ -105,7 +105,7 @@ def test_upload_sanitizes_traversal_path(client, headers, api, monkeypatch):
 
 
 def test_upload_marks_ready_after_background_ingest(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None, provenance=None: None)
 
     response = _upload(client, headers)
 
@@ -123,7 +123,7 @@ def test_upload_forwards_workspace_to_ingest(client, headers, monkeypatch):
     """PR-4: form field `workspace` flows into the ingest seam."""
     seen: dict = {}
 
-    def fake_ingest(tenant, path, workspace=None):
+    def fake_ingest(tenant, path, workspace=None, provenance=None):
         seen["ws"] = workspace
 
     monkeypatch.setattr("src.api.documents._ingest", fake_ingest)
@@ -139,10 +139,50 @@ def test_upload_forwards_workspace_to_ingest(client, headers, monkeypatch):
     assert seen["ws"] == "legal"
 
 
+def test_upload_forwards_provenance_inputs(client, headers, monkeypatch):
+    """PR-4b-iv: optional form fields flow into the ingest seam."""
+    seen: dict = {}
+
+    def fake_ingest(tenant, path, workspace=None, provenance=None):
+        seen.update(provenance or {})
+
+    monkeypatch.setattr("src.api.documents._ingest", fake_ingest)
+
+    response = client.post(
+        "/documents",
+        files={"file": ("paper.pdf", PDF_BYTES, "application/pdf")},
+        data={
+            "workspace": "legal",
+            "doc_date": "1872-01-01",
+            "doc_version": "revised-1891",
+            "jurisdiction": "India",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 202
+    assert seen == {"date": "1872-01-01", "version": "revised-1891", "jurisdiction": "India"}
+
+
+def test_upload_provenance_defaults_empty(client, headers, monkeypatch):
+    seen: dict = {"sentinel": True}
+
+    def fake_ingest(tenant, path, workspace=None, provenance=None):
+        seen.clear()
+        seen.update(provenance or {})
+
+    monkeypatch.setattr("src.api.documents._ingest", fake_ingest)
+
+    response = _upload(client, headers)
+
+    assert response.status_code == 202
+    assert seen == {"date": "", "version": "", "jurisdiction": ""}
+
+
 def test_upload_rejects_unknown_workspace(client, headers, monkeypatch):
     monkeypatch.setattr(
         "src.api.documents._ingest",
-        lambda tenant, path, workspace=None: None,
+        lambda tenant, path, workspace=None, provenance=None: None,
     )
 
     response = client.post(
@@ -156,7 +196,7 @@ def test_upload_rejects_unknown_workspace(client, headers, monkeypatch):
 
 
 def test_upload_marks_failed_when_ingest_raises(client, headers, monkeypatch):
-    def boom(tenant, path, workspace=None):
+    def boom(tenant, path, workspace=None, provenance=None):
         raise RuntimeError("corrupt pdf")
 
     monkeypatch.setattr("src.api.documents._ingest", boom)
@@ -228,7 +268,7 @@ def test_startup_marks_stale_processing_as_failed(api, headers):
 
 def test_duplicate_filename_reused_after_purge(client, headers, monkeypatch):
     """PR-3b: successful ingest removes the raw file, freeing its name."""
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None, provenance=None: None)
 
     first = _upload(client, headers, name="dup.pdf")
     second = _upload(client, headers, name="dup.pdf")
@@ -239,7 +279,7 @@ def test_duplicate_filename_reused_after_purge(client, headers, monkeypatch):
 
 def test_duplicate_filename_gets_unique_path_while_file_exists(client, headers, monkeypatch):
     """A kept file (failed ingest) still collides → claim_path suffixes it."""
-    def boom(tenant, path, workspace=None):
+    def boom(tenant, path, workspace=None, provenance=None):
         raise RuntimeError("ingest down")
 
     monkeypatch.setattr("src.api.documents._ingest", boom)
@@ -271,7 +311,7 @@ def test_get_document_404_for_other_tenant(client, headers):
 
 
 def test_delete_document_removes_row_and_file(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None, provenance=None: None)
     monkeypatch.setattr("src.api.documents._delete_chunks", lambda tenant, doc: None)
     uploaded = _upload(client, headers, name="gone.pdf")
 

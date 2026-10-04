@@ -181,6 +181,41 @@ def test_upsert_defaults_to_default_tenant(mock_embed, mock_chroma):
 
 @patch("src.db.chroma_client.Chroma")
 @patch("src.db.chroma_client.get_embedding_model")
+def test_upsert_passes_provenance_metadata(mock_embed, mock_chroma):
+    """PR-4b-iv: provenance keys reach Chroma; tenant_id stays authoritative."""
+    mock_vs = MagicMock()
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+    from src.db.chroma_client import upsert_chunks
+
+    upsert_chunks(
+        [
+            {
+                "text": "t",
+                "doc_id": "d1",
+                "page_num": 1,
+                "chunk_index": 0,
+                "content_hash": "abc",
+                "chunk_index_in_page": 4,
+                "doc_date": "1872",
+                "jurisdiction": "India",
+                "tenant_id": "spoofed",
+            }
+        ],
+        tenant_id="tenant-a",
+    )
+
+    metadata = mock_vs.add_documents.call_args.kwargs["documents"][0].metadata
+    assert metadata["content_hash"] == "abc"
+    assert metadata["chunk_index_in_page"] == 4
+    assert metadata["doc_date"] == "1872"
+    assert metadata["jurisdiction"] == "India"
+    assert metadata["tenant_id"] == "tenant-a"
+    assert "text" not in metadata
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
 def test_load_all_chunks_applies_tenant_predicate(mock_embed, mock_chroma):
     mock_vs = MagicMock()
     mock_collection = MagicMock()

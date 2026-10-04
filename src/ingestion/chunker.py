@@ -2,6 +2,7 @@
 Document chunking with metadata preservation.
 """
 
+import hashlib
 from typing import List, Dict
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -47,6 +48,9 @@ def chunk_pages(pages: List[Dict]) -> List[Dict]:
                     "chunk_index": global_chunk_index,
                     "chunk_index_in_page": chunk_index_in_page,
                     "char_count": len(chunk_text),
+                    "content_hash": hashlib.sha256(
+                        chunk_text.encode("utf-8")
+                    ).hexdigest(),
                 }
             )
 

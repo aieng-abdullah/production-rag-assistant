@@ -32,10 +32,16 @@ class RAGService:
         tenant_id: str,
         path: str | Path,
         workspace: str = Config.DEFAULT_WORKSPACE,
+        provenance: dict | None = None,
     ) -> dict:
-        """Run the full PDF pipeline. Returns {"pages": int, "chunks": int}."""
+        """Run the full PDF pipeline. Returns {"pages": int, "chunks": int}.
+
+        `provenance` carries optional doc-level upload inputs (date,
+        version, jurisdiction) stamped onto every chunk (PR-4b-iv)."""
         logger.info(f"Ingest tenant={tenant_id} workspace={workspace} path={path}")
-        return _ingest_pipeline(str(path), tenant_id=tenant_id, workspace=workspace)
+        return _ingest_pipeline(
+            str(path), tenant_id=tenant_id, workspace=workspace, provenance=provenance
+        )
 
     def generate_answer(
         self,

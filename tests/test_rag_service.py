@@ -23,7 +23,10 @@ class TestIngest:
         result = service.ingest("tenant-a", Path("data/raw/doc.pdf"))
 
         mock_pipeline.assert_called_once_with(
-            "data/raw/doc.pdf", tenant_id="tenant-a", workspace="academic"
+            "data/raw/doc.pdf",
+            tenant_id="tenant-a",
+            workspace="academic",
+            provenance=None,
         )
         assert result == {"pages": 3, "chunks": 42}
 
@@ -36,7 +39,23 @@ class TestIngest:
         service.ingest("tenant-a", str(pdf))
 
         mock_pipeline.assert_called_once_with(
-            str(pdf), tenant_id="tenant-a", workspace="academic"
+            str(pdf), tenant_id="tenant-a", workspace="academic", provenance=None
+        )
+
+    @patch("src.services.rag_service._ingest_pipeline")
+    def test_forwards_provenance(self, mock_pipeline, service, tmp_path):
+        mock_pipeline.return_value = {"pages": 1, "chunks": 2}
+        pdf = tmp_path / "a.pdf"
+        pdf.write_bytes(b"%PDF")
+        provenance = {"date": "1872", "version": "v1", "jurisdiction": "India"}
+
+        service.ingest("tenant-a", str(pdf), provenance=provenance)
+
+        mock_pipeline.assert_called_once_with(
+            str(pdf),
+            tenant_id="tenant-a",
+            workspace="academic",
+            provenance=provenance,
         )
 
 

@@ -47,9 +47,14 @@ def _raw_dir(user_id: int) -> Path:
     return Config.DATA_DIR / "raw" / str(user_id)
 
 
-def _ingest(tenant_id: str, path: Path, workspace: str = Config.DEFAULT_WORKSPACE) -> None:
+def _ingest(
+    tenant_id: str,
+    path: Path,
+    workspace: str = Config.DEFAULT_WORKSPACE,
+    provenance: dict | None = None,
+) -> None:
     """Seam: tests monkeypatch this instead of running the embedder."""
-    RAGService().ingest(tenant_id, path, workspace=workspace)
+    RAGService().ingest(tenant_id, path, workspace=workspace, provenance=provenance)
 
 
 def _delete_chunks(tenant_id: str, doc_id: str) -> None:
@@ -98,11 +103,12 @@ def process_document(
     document_id: int,
     path: Path,
     workspace: str = Config.DEFAULT_WORKSPACE,
+    provenance: dict | None = None,
 ) -> None:
     """BackgroundTasks callback — ingest, then mark ready/failed and refresh BM25."""
     tenant = str(user_id)
     try:
-        _ingest(tenant, path, workspace=workspace)
+        _ingest(tenant, path, workspace=workspace, provenance=provenance)
     except Exception as exc:
         logger.error(f"Ingest failed doc={path.name} tenant={tenant}: {exc}")
         _set_status(document_id, "failed")
@@ -127,12 +133,17 @@ def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     workspace: Literal["legal", "academic"] = Form(Config.DEFAULT_WORKSPACE),
+    doc_date: str | None = Form(None),
+    doc_version: str | None = Form(None),
+    jurisdiction: str | None = Form(None),
     user_id: int = Depends(require_user),
 ) -> dict:
     """Save PDF, queue ingestion, return `processing` status for polling.
 
     `workspace` tags every chunk's metadata (legal | academic) so retrieval
-    filters by niche (PLAN PR-4)."""
+    filters by niche (PLAN PR-4). Optional `doc_date`/`doc_version`/
+    `jurisdiction` are provenance inputs stamped on every chunk
+    (PLAN PR-4b-iv)."""
     try:
         filename = sanitize_filename(file.filename or "")
     except ValueError as exc:
@@ -168,7 +179,14 @@ def upload_document(
         path.unlink(missing_ok=True)
         raise quota_to_http(exc) from exc
 
-    background_tasks.add_task(process_document, user_id, document_id, path, workspace)
+    provenance = {
+        "date": (doc_date or "").strip(),
+        "version": (doc_version or "").strip(),
+        "jurisdiction": (jurisdiction or "").strip(),
+    }
+    background_tasks.add_task(
+        process_document, user_id, document_id, path, workspace, provenance
+    )
     logger.info(f"Upload queued doc={path.name} tenant={user_id} bytes={len(payload)}")
     return {"id": document_id, "filename": path.name, "status": "processing"}
 
