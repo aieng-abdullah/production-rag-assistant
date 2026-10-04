@@ -27,6 +27,7 @@ __all__ = [
     "STORAGE_LIMIT_BYTES",
     "queries_today",
     "reserve_query_slot",
+    "reserve_verify_slot",
     "refund_usage",
     "check_document_quota",
     "reserve_document_slot",
@@ -66,12 +67,16 @@ def _query_quota_error() -> QuotaExceeded:
 
 
 def queries_today(session: Session, user_id: int) -> int:
-    """Count this user's `query` events since 00:00 UTC."""
+    """Count this user's quota units since 00:00 UTC.
+
+    Counts `query` AND `verify` rows — verified answers cost 2 units
+    (PLAN PR-4b), so `/usage` reports units consumed, not answers given.
+    """
     count = (
         session.query(func.count(UsageEvent.id))
         .filter(
             UsageEvent.user_id == user_id,
-            UsageEvent.kind == "query",
+            UsageEvent.kind.in_(["query", "verify"]),
             UsageEvent.created_at >= _midnight_utc(),
         )
         .scalar()
@@ -79,18 +84,18 @@ def queries_today(session: Session, user_id: int) -> int:
     return int(count or 0)
 
 
-def reserve_query_slot(session: Session, user_id: int) -> int:
-    """Atomically count+insert one `query` usage event; returns its id.
+def _reserve_unit(session: Session, user_id: int, kind: str) -> int:
+    """Atomically count+insert one usage unit; returns its id.
 
-    Single statement: the WHERE clause re-evaluates the count at insert
-    time, so concurrent requests cannot both slip past the limit.
-    Raises QuotaExceeded when no row was inserted (limit reached).
+    Single statement: the WHERE clause re-evaluates the combined
+    query+verify count at insert time, so concurrent requests cannot both
+    slip past the limit. Raises QuotaExceeded when no row was inserted.
     """
     today = (
         select(func.count(UsageEvent.id))
         .where(
             UsageEvent.user_id == user_id,
-            UsageEvent.kind == "query",
+            UsageEvent.kind.in_(["query", "verify"]),
             UsageEvent.created_at >= _midnight_utc(),
         )
         .scalar_subquery()
@@ -106,7 +111,7 @@ def reserve_query_slot(session: Session, user_id: int) -> int:
             ],
             select(
                 literal(user_id),
-                literal("query"),
+                literal(kind),
                 literal(1),
                 literal(datetime.now(timezone.utc)),
             ).where(today < DAILY_QUERY_LIMIT),
@@ -117,6 +122,17 @@ def reserve_query_slot(session: Session, user_id: int) -> int:
     if row is None:
         raise _query_quota_error()
     return int(row[0])
+
+
+def reserve_query_slot(session: Session, user_id: int) -> int:
+    """Reserve the `query` unit of one chat request."""
+    return _reserve_unit(session, user_id, "query")
+
+
+def reserve_verify_slot(session: Session, user_id: int) -> int:
+    """Reserve the `verify` unit (PLAN PR-4b: each verified answer costs
+    query+verify = 2 units of the same daily pool)."""
+    return _reserve_unit(session, user_id, "verify")
 
 
 def refund_usage(session: Session, event_id: int) -> None:

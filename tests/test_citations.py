@@ -1,16 +1,18 @@
-import pytest
-from src.generation.Citation_system import CitedAnswer, Source, build_citation_prompt
+"""CitedAnswer DTO + citation prompt contract (PLAN PR-4b).
 
-def test_valid_citation_accepted():
-    answer = CitedAnswer(
-        answer="The sky is blue [SOURCE 1].",
-        sources=[Source(doc_id="paper", page_num=1, text="The sky is blue.")]
-    )
-    assert answer.answer is not None
+The old per-sentence prose regex validator is retired — claims are validated
+by src/generation.schema (see tests/test_structured_schema.py).
+"""
 
-def test_missing_citation_rejected():
-    with pytest.raises(Exception):
-        CitedAnswer(answer="The sky is blue.", sources=[])
+from src.generation.Citation_system import CitedAnswer, build_citation_prompt
+
+
+def test_cited_answer_is_plain_dto():
+    """No validation on assembly — prose comes from already-verified claims."""
+    answer = CitedAnswer(answer="free-form prose without markers", sources=[])
+    assert answer.answer == "free-form prose without markers"
+    assert answer.sources == []
+
 
 def test_build_prompt_contains_sources():
     chunks = [{"text": "hello world", "doc_id": "paper", "page_num": 1}]
@@ -18,39 +20,19 @@ def test_build_prompt_contains_sources():
     assert "[SOURCE 1]" in prompt
 
 
-def test_abstention_accepted_without_citation():
-    """Refusal is first-class: profile prompts require it on weak evidence."""
-    answer = CitedAnswer(
-        answer=(
-            "I don't have enough information to answer this question "
-            "based on the provided sources."
-        ),
-        sources=[],
-    )
-    assert "enough information" in answer.answer
+def test_prompt_contains_json_contract():
+    prompt = build_citation_prompt("what is this?", [{"text": "t"}])
+    assert '"claims"' in prompt
+    assert "source_id" in prompt
+    assert "word-for-word" in prompt
 
 
-def test_uncited_non_abstain_still_rejected():
-    with pytest.raises(Exception, match="citation"):
-        CitedAnswer(answer="Liability follows from remoteness.", sources=[])
+def test_contract_demands_pure_abstain_object():
+    prompt = build_citation_prompt("q?", [{"text": "t"}])
+    assert '"abstained": true' in prompt
+    assert '"claims": []' in prompt
 
 
-def test_abstention_phrase_is_case_insensitive():
-    answer = CitedAnswer(
-        answer="I DO NOT HAVE ENOUGH INFORMATION TO ANSWER THIS QUESTION BASED ON THE PROVIDED SOURCES.",
-        sources=[],
-    )
-    assert answer.sources == []
-
-
-def test_abstain_phrase_cannot_launder_uncited_claims():
-    """Pure abstention only — refusal + claims with zero markers must fail."""
-    with pytest.raises(Exception, match="citation"):
-        CitedAnswer(
-            answer=(
-                "I don't have enough information to answer this question "
-                "based on the provided sources. The defendant is liable "
-                "for all losses."
-            ),
-            sources=[],
-        )
+def test_contract_forbids_prose_response():
+    prompt = build_citation_prompt("q?", [{"text": "t"}])
+    assert "ONLY one JSON object" in prompt

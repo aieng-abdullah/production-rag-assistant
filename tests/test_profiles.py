@@ -14,7 +14,7 @@ def test_academic_prompt_is_current_behavior():
     prompt = get_system_prompt("academic")
     assert prompt == ACADEMIC_PROMPT
     assert "research assistant" in prompt
-    assert "[SOURCE N]" in prompt
+    assert "JSON claims" in prompt
 
 
 def test_legal_prompt_requires_statute_style_and_abstain():
@@ -22,7 +22,7 @@ def test_legal_prompt_requires_statute_style_and_abstain():
     assert prompt == LEGAL_PROMPT
     assert "legal research assistant" in prompt
     assert "Section" in prompt
-    # Abstention phrasing must match Citation_system._ABSTAIN_RE.
+    # Abstention phrasing must match the shared JSON contract's exact reason.
     assert "don't have enough information" in prompt
 
 
@@ -76,6 +76,7 @@ def test_prompt_version_keys_exist_and_validate_workspace():
     from src.generation.profiles import PROMPT_VERSIONS, get_prompt_version
 
     assert set(PROMPT_VERSIONS) == {"legal", "academic"}
-    assert get_prompt_version("legal") == "legal-v1"
+    assert get_prompt_version("legal") == "legal-v2"
+    assert get_prompt_version("academic") == "academic-v2"
     with pytest.raises(ValueError, match="Unknown workspace"):
         get_prompt_version("bogus")

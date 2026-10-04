@@ -31,6 +31,8 @@ class Config:
     # --- Groq LLM (primary, free) ---
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+    # Judge model for claim entailment verification (PLAN PR-4b-ii).
+    VERIFY_MODEL = os.getenv("VERIFY_MODEL", "openai/gpt-oss-20b")
 
     # --- Anthropic (optional failover) ---
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
