@@ -113,29 +113,31 @@ Branch: `feat/workspaces`
 **Hope:** one demo switches niches, legal prompt abstains on out-of-corpus.
 
 ### PR-4b — Citation Verifier + Provenance (agentic v1)
-Branch: `feat/citation-verifier`
-- [ ] Structured output schema (both workspaces, one validator): `claims[]` with
+Branch: stacked `feat/verify-schema` → `feat/regression-eval` (PRs #44–#48)
+- [x] Structured output schema (both workspaces, one validator): `claims[]` with
       `citations[{source_id, verbatim quote}]`, `abstained: bool`, `abstain_reason`;
       prose `[SOURCE N]` validator retired
-- [ ] Deterministic quote verification (whitespace/case-normalized containment,
+- [x] Deterministic quote verification (whitespace/case-normalized containment,
       range-checked source_ids) + sources resolved server-side from chunk
       metadata — model never writes doc_id/page_num
-- [ ] Verifier: per-claim entailment judge `SUPPORTED/PARTIAL/UNSUPPORTED`
+- [x] Verifier: per-claim entailment judge `SUPPORTED/PARTIAL/UNSUPPORTED`
       (cheap model tier, separate prompt channel — injection hardened)
-- [ ] UNSUPPORTED → retry with error feedback (bound ≤2) → else `⚠ unverified`
+- [x] UNSUPPORTED → retry with error feedback (bound ≤2) → else `⚠ unverified`
       badge or abstain, never silent drop
-- [ ] Response shape + `verification{status, per_claim[]}`
-- [ ] `AnswerTrace` persisted: queries issued, chunks retrieved/used/discussed,
+- [x] Response shape + `verification{status, per_claim[]}`
+- [x] `AnswerTrace` persisted: queries issued, chunks retrieved/used/discussed,
       prompt version, model output, verification events
-- [ ] `GET /answers/{id}/trace`
-- [ ] Provenance metadata: pinpoint (page/section/paragraph), content hash,
+- [x] `GET /answers/{id}/trace`
+- [x] Provenance metadata: pinpoint (page/section/paragraph), content hash,
       doc date/version, jurisdiction; stable source numbering
-- [ ] Quota: verification = +1 unit (documented)
-- [ ] Regression eval set: proviso case, missing cross-ref, conflicting
+- [x] Quota: verification = +1 unit (documented)
+- [x] Regression eval set: proviso case, missing cross-ref, conflicting
       sources, out-of-corpus → track citation precision/recall + abstention
       accuracy before/after prompt changes
-- [ ] Tests: fake-judge unit tests, retry bound ≤2, trace shape, quota math
+- [x] Tests: fake-judge unit tests, retry bound ≤2, trace shape, quota math
 **Hope:** Langfuse shows verifier spans; badge visible in UI; CI green.
+**Status:** all gates green (ruff clean, 341 tests, cov 93.05%); live regression
+eval PASS (precision 1.0 / recall 1.0 / abstention 1.0).
 
 ### PR-5 — Stripe (flagged)
 Branch: `feat/billing-flagged`
