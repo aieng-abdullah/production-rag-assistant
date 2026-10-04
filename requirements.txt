@@ -21,7 +21,7 @@ ragas>=0.1.0
 
 # Monitoring & Logging
 loguru>=0.7.0
-langfuse>=2.0.0
+langfuse>=3.0.0,<4  # code uses v3 observation API (start_as_current_observation)
 
 # PDF Processing
 pymupdf>=1.25.0
