@@ -297,6 +297,26 @@ streamlit run app.py
 
 Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (env or sidebar).
 
+### Google OAuth setup (optional)
+
+Sign-in is env-gated. Without credentials the API runs normally and
+`GET /auth/google` returns **501** with this hint.
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials → Create credentials → OAuth client ID** (Web application).
+2. Authorized redirect URI: `http://localhost:8501/auth/google/callback`
+   (override with `GOOGLE_REDIRECT_URI` if the port differs).
+3. Add to `.env`:
+
+```bash
+GOOGLE_CLIENT_ID=...        # from step 2
+GOOGLE_CLIENT_SECRET=...
+JWT_SECRET=...              # openssl rand -hex 32 — HS256 key, never committed
+FRONTEND_URL=http://localhost:8501   # post-login redirect target
+```
+
+Flow: `GET /auth/google` → consent screen → `/auth/google/callback` → JWT
+(HS256, 7 days) → redirect to `FRONTEND_URL/?token=...`. Never log the token.
+
 ---
 
 ## Running evaluation
