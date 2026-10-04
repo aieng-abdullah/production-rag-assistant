@@ -247,6 +247,18 @@ def generate(
         return _run_pipeline(
             query, bm25_index, provider_overrides, tenant_id, workspace=workspace
         )
-    return _generate_traced(
-        query, bm25_index, lf, provider_overrides, tenant_id, workspace=workspace
-    )
+    try:
+        return _generate_traced(
+            query, bm25_index, lf, provider_overrides, tenant_id, workspace=workspace
+        )
+    except ImportError as exc:
+        # Tracing is non-critical: a broken/partial Langfuse integration must
+        # never block core queries (AGENTS graceful-degradation contract).
+        logger.warning(
+            "Langfuse langchain integration unavailable ({}); "
+            "falling back to untraced pipeline",
+            exc,
+        )
+        return _run_pipeline(
+            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+        )

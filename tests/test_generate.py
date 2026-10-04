@@ -199,6 +199,29 @@ class TestGenerate:
         )
         assert isinstance(result, CitedAnswer)
 
+    @patch("src.generation.chain._run_pipeline")
+    @patch("src.generation.chain._generate_traced")
+    @patch("src.generation.chain.get_langfuse_client")
+    def test_generate_traced_importerror_falls_back(
+        self, mock_lf, mock_traced, mock_pipeline
+    ):
+        """A broken Langfuse integration must degrade to the untraced pipeline."""
+        mock_lf.return_value = MagicMock()
+        mock_traced.side_effect = ImportError("No module named 'langfuse.langchain'")
+        mock_pipeline.return_value = CitedAnswer(
+            answer="[SOURCE 1]",
+            sources=[Source(doc_id="d1", page_num=1, text="x")],
+        )
+        bm25 = MagicMock()
+        result = generate("query", bm25)
+        mock_traced.assert_called_once_with(
+            "query", bm25, mock_lf.return_value, None, "default", workspace="academic"
+        )
+        mock_pipeline.assert_called_once_with(
+            "query", bm25, None, "default", workspace="academic"
+        )
+        assert isinstance(result, CitedAnswer)
+
 
 class TestInvokeLlmFailover:
     """Test the provider failover logic in _invoke_llm."""
