@@ -58,6 +58,13 @@ def _oauth_state(client: TestClient) -> str:
     return state
 
 
+def _redirect_token(location: str) -> str:
+    """JWT rides the redirect fragment (`#token=...`), never the query string."""
+    parsed = urlparse(location)
+    assert not parsed.query, f"token leaked into query string: {parsed.query}"
+    return parse_qs(parsed.fragment)["token"][0]
+
+
 def test_google_route_501_without_credentials(api, monkeypatch):
     monkeypatch.setattr(Config, "GOOGLE_CLIENT_ID", "")
     monkeypatch.setattr(Config, "GOOGLE_CLIENT_SECRET", "")
@@ -117,7 +124,7 @@ def test_callback_creates_user_and_redirects_with_jwt(api, monkeypatch):
     )
 
     assert response.status_code == 302
-    token = parse_qs(urlparse(response.headers["location"]).query)["token"][0]
+    token = _redirect_token(response.headers["location"])
     with session_scope() as session:
         user = session.query(User).one()
     assert decode_token(token) == user.id
@@ -154,6 +161,26 @@ def test_callback_maps_httpx_failure_to_502(api, monkeypatch):
         raise httpx.HTTPError("connection refused")
 
     monkeypatch.setattr("src.api.auth._exchange_code", httpx_boom)
+    client = TestClient(api)
+    state = _oauth_state(client)
+
+    response = client.get(
+        "/auth/google/callback",
+        params={"code": "c", "state": state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 502
+
+
+def test_callback_maps_oauth_error_to_502(api, monkeypatch):
+    """Expired/replayed code → authlib OAuthError (invalid_grant), not 500."""
+    from authlib.integrations.base_client.errors import OAuthError
+
+    def oauth_boom(code):
+        raise OAuthError(error="invalid_grant")
+
+    monkeypatch.setattr("src.api.auth._exchange_code", oauth_boom)
     client = TestClient(api)
     state = _oauth_state(client)
 
@@ -254,7 +281,7 @@ def test_issued_token_never_logged(api, monkeypatch):
             follow_redirects=False,
         )
         assert response.status_code == 302
-        token = parse_qs(urlparse(response.headers["location"]).query)["token"][0]
+        token = _redirect_token(response.headers["location"])
     finally:
         loguru_logger.remove(sink_id)
 

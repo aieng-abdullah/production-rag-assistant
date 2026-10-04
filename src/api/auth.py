@@ -5,12 +5,16 @@ Env-gated: missing GOOGLE_CLIENT_ID/SECRET → 501 with setup hint
 The `state` round-trip is enforced via a short-lived httpOnly cookie (CSRF).
 """
 
+import hmac
 from typing import Any
 
 import httpx
+from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.httpx_client import OAuth2Client
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
+from loguru import logger
+from sqlalchemy.exc import IntegrityError
 
 from src.api.security import create_token
 from src.config import Config
@@ -55,7 +59,11 @@ def _exchange_code(code: str) -> dict[str, Any]:
 
 
 def _upsert_user(profile: dict[str, Any]) -> int:
-    """Find by `sub` (fallback email), update profile fields, or create. Returns user id."""
+    """Find by `sub` (fallback email), update profile fields, or create. Returns user id.
+
+    One retry: concurrent callbacks can race the unique index — second attempt
+    finds the row the winner committed.
+    """
     sub = profile.get("sub")
     email = profile.get("email")
     if not sub or not email:
@@ -63,18 +71,27 @@ def _upsert_user(profile: dict[str, Any]) -> int:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Google profile missing sub/email claims",
         )
-    with session_scope() as session:
-        user = session.query(User).filter(User.google_sub == sub).first()
-        if user is None:
-            user = session.query(User).filter(User.email == email).first()
-        if user is None:
-            user = User(email=email, google_sub=sub)
-            session.add(user)
-        user.google_sub = sub
-        user.name = profile.get("name") or user.name
-        user.picture_url = profile.get("picture") or user.picture_url
-        session.flush()
-        return int(user.id)
+    for attempt in (1, 2):
+        try:
+            with session_scope() as session:
+                user = session.query(User).filter(User.google_sub == sub).first()
+                if user is None:
+                    user = session.query(User).filter(User.email == email).first()
+                if user is None:
+                    user = User(email=email, google_sub=sub)
+                    session.add(user)
+                user.google_sub = sub
+                user.name = profile.get("name") or user.name
+                user.picture_url = profile.get("picture") or user.picture_url
+                session.flush()
+                return int(user.id)
+        except IntegrityError:
+            if attempt == 2:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="User upsert failed twice under concurrent sign-in",
+                ) from None
+            logger.warning("User upsert race, retrying sub={sub}", sub=sub)
 
 
 @router.get("/google")
@@ -104,20 +121,28 @@ def google_callback(
     if _credentials_missing():
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=_SETUP_HINT)
     expected = request.cookies.get(STATE_COOKIE)
-    if not code or not expected or not state or expected != state:
+    if (
+        not code
+        or not expected
+        or not state
+        or not hmac.compare_digest(expected, state)
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state"
         )
     try:
         profile = _exchange_code(code)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, OAuthError) as exc:
+        # Expired/replayed code (invalid_grant) surfaces as authlib OAuthError.
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Google token exchange failed",
         ) from exc
     user_id = _upsert_user(profile)
+    logger.info("Google sign-in ok user_id={user_id}", user_id=user_id)
     token = create_token(user_id)
     frontend = Config.FRONTEND_URL.rstrip("/")
-    response = RedirectResponse(f"{frontend}/?token={token}", status_code=status.HTTP_302_FOUND)
+    # Fragment, not query: tokens in query strings land in history/Referer logs.
+    response = RedirectResponse(f"{frontend}/#token={token}", status_code=status.HTTP_302_FOUND)
     response.delete_cookie(STATE_COOKIE)
     return response

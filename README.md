@@ -315,7 +315,9 @@ FRONTEND_URL=http://localhost:8501   # post-login redirect target
 ```
 
 Flow: `GET /auth/google` → consent screen → `/auth/google/callback` → JWT
-(HS256, 7 days) → redirect to `FRONTEND_URL/?token=...`. Never log the token.
+(HS256, 7 days) → redirect to `FRONTEND_URL/#token=...` (fragment — never
+query string, so the token stays out of access logs and Referer headers).
+Never log the token.
 
 ---
 

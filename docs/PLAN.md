@@ -121,7 +121,7 @@ Branch: `feat/billing-flagged`
 
 ### PR-6 — Streamlit → API client
 Branch: `refactor/frontend-api-client`
-- [ ] Google sign-in button → JWT via `st.query_params` → `st.session_state`
+- [ ] Google sign-in button → JWT via URL **fragment** (`#token=`) → `st.session_state`
 - [ ] Sidebar/chat/upload via `httpx` + Bearer; status polling + spinner
 - [ ] Workspace switcher (Legal / Academic)
 - [ ] Remove ALL direct `src.*` imports from `app.py`
