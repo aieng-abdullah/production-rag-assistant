@@ -40,6 +40,19 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
+    # --- Google OAuth + JWT (PLAN PR-2b, env-gated) ---
+    # Absent → /auth/* returns 501 and the app runs without sign-in.
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8501/auth/google/callback"
+    )
+    # HS256 signing key — env-only, never logged, required once Google creds are set.
+    JWT_SECRET = os.getenv("JWT_SECRET", "")
+    JWT_TTL_DAYS = int(os.getenv("JWT_TTL_DAYS", "7"))
+    # Browser redirect target after OAuth callback (Streamlit UI).
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
+
     # --- Retrieval Params ---
     CHUNK_SIZE = 256
     CHUNK_OVERLAP = 100

@@ -66,14 +66,14 @@ Branch: `feat/tenant-metadata-scoping`
 ### PR-2 — Data layer + Google auth
 Split: **PR-2a** `feat/data-layer` (models + Alembic) → **PR-2b** `feat/auth` (endpoints).
 Branch: `feat/data-layer`, `feat/auth`
-- [ ] Deps: fastapi uvicorn sqlalchemy alembic authlib pyjwt httpx
+- [x] Deps: fastapi uvicorn sqlalchemy alembic authlib pyjwt httpx
       (per-PR: sqlalchemy+alembic in 2a; web/auth deps in 2b)
-- [ ] Models: User, Workspace(legal|academic), Document, Answer, AnswerTrace,
+- [x] Models: User, Workspace(legal|academic), Document, Answer, AnswerTrace,
       UsageEvent, Subscription
-- [ ] Alembic migrations; SQLite URL override in tests
-- [ ] `/auth/google` + `/auth/google/callback` → JWT (7d, HS256, env secret)
-- [ ] Google creds absent → 501 + README setup instructions (open-source rule)
-- [ ] `require_user` dependency → `user_id` threads as tenant_id
+- [x] Alembic migrations; SQLite URL override in tests
+- [x] `/auth/google` + `/auth/google/callback` → JWT (7d, HS256, env secret)
+- [x] Google creds absent → 501 + README setup instructions (open-source rule)
+- [x] `require_user` dependency → `user_id` threads as tenant_id
 **Hope:** sign-in works locally, no token in logs, 501 path tested.
 
 ### PR-3 — API endpoints + quotas
@@ -121,7 +121,7 @@ Branch: `feat/billing-flagged`
 
 ### PR-6 — Streamlit → API client
 Branch: `refactor/frontend-api-client`
-- [ ] Google sign-in button → JWT via `st.query_params` → `st.session_state`
+- [ ] Google sign-in button → JWT via URL **fragment** (`#token=`) → `st.session_state`
 - [ ] Sidebar/chat/upload via `httpx` + Bearer; status polling + spinner
 - [ ] Workspace switcher (Legal / Academic)
 - [ ] Remove ALL direct `src.*` imports from `app.py`
