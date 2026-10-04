@@ -1,0 +1,74 @@
+[
+  {
+    "id": "legal-proviso-marriage",
+    "class": "proviso",
+    "workspace": "legal",
+    "question": "Can a relative's opinion alone prove a marriage under the Indian Divorce Act, 1869?",
+    "expect": "cite",
+    "expected_doc_id": "indian_evidence_act_1872",
+    "expected_quote": "Provided that such opinion shall not be sufficient to prove a marriage"
+  },
+  {
+    "id": "legal-proviso-discovery",
+    "class": "proviso",
+    "workspace": "legal",
+    "question": "Under what condition can information from an accused person prove the fact of a discovery?",
+    "expect": "cite",
+    "expected_doc_id": "indian_evidence_act_1872",
+    "expected_quote": "deposed to as discovered in consequence of information received from a person accused"
+  },
+  {
+    "id": "legal-cross-ref-158",
+    "class": "missing-cross-ref",
+    "workspace": "legal",
+    "question": "When a statement relevant under Section 32 or 33 is proved, what other matters may be proved with it?",
+    "expect": "cite",
+    "expected_doc_id": "indian_evidence_act_1872",
+    "expected_quote": "all matters may be proved either in order to contradict or to corroborate"
+  },
+  {
+    "id": "legal-conflicting-102",
+    "class": "conflicting-sources",
+    "workspace": "legal",
+    "question": "If no evidence at all were given on either side, on whom does the burden of proof lie?",
+    "expect": "cite",
+    "expected_doc_id": "indian_evidence_act_1872",
+    "expected_quote": "lies on that person who would fail if no evidence at all were given"
+  },
+  {
+    "id": "legal-conflicting-101",
+    "class": "conflicting-sources",
+    "workspace": "legal",
+    "question": "Who must prove the facts they assert in court?",
+    "expect": "cite",
+    "expected_doc_id": "indian_evidence_act_1872",
+    "expected_quote": "must prove that those facts exist"
+  },
+  {
+    "id": "legal-out-of-corpus",
+    "class": "out-of-corpus",
+    "workspace": "legal",
+    "question": "How do transformer neural networks handle long sequences?",
+    "expect": "abstain",
+    "expected_doc_id": "",
+    "expected_quote": ""
+  },
+  {
+    "id": "academic-attention-sublayer",
+    "class": "grounded-cite",
+    "workspace": "academic",
+    "question": "What mechanism does each encoder layer use as its first sub-layer?",
+    "expect": "cite",
+    "expected_doc_id": "attention_is_all_you_need",
+    "expected_quote": "multi-head self-attention mechanism"
+  },
+  {
+    "id": "academic-out-of-corpus",
+    "class": "out-of-corpus",
+    "workspace": "academic",
+    "question": "What does the Indian Evidence Act say about dying declarations?",
+    "expect": "abstain",
+    "expected_doc_id": "",
+    "expected_quote": ""
+  }
+]
