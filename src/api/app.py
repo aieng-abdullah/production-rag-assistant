@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from src.api.answers import router as answers_router
 from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
 from src.api.documents import recover_stale_documents, router as documents_router
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(documents_router)
     app.include_router(chat_router)
+    app.include_router(answers_router)
     app.include_router(usage_router)
     return app
 

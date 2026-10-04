@@ -265,6 +265,26 @@ class TestRunPipeline:
 
     @patch("src.generation.chain.retrieval")
     @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_includes_trace_payload(self, mock_llm, mock_retrieval):
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 7}
+        ]
+        mock_llm.return_value = (_json_answer(), None)
+
+        result = _run_pipeline("test", MagicMock(), workspace="legal")
+
+        trace = result.trace
+        assert trace["workspace"] == "legal"
+        assert trace["prompt_version"] == "legal-v2"
+        assert trace["chunks"] == [
+            {"source_id": 1, "doc_id": "d1", "page_num": 7, "cited": True}
+        ]
+        assert trace["claims"][0]["citations"][0]["quote"] == "chunk text"
+        assert trace["abstained"] is False
+        assert trace["verification"]["status"] == "verified"
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
     def test_pipeline_judge_rejection_triggers_regen(self, mock_llm, mock_retrieval):
         """One UNSUPPORTED round → feedback re-gen → verified, no exception."""
         mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
