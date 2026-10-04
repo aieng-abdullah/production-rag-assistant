@@ -14,6 +14,7 @@ from src.generation.chain import (
 from src.generation.Citation_system import CitedAnswer, Source
 from src.generation.schema import AnswerVerificationError
 from src.generation.providers import Provider
+from src.generation.verifier import VERIFY_RETRY, ClaimVerification
 
 
 def _json_answer(text="The fact holds.", source_id=1, quote="chunk text"):
@@ -118,6 +119,20 @@ class TestBuildSources:
 
     def test_empty_chunks(self):
         assert _build_sources([]) == []
+
+
+@pytest.fixture(autouse=True)
+def _judge_all_supported():
+    """Offline judge: every claim SUPPORTED (per-test overrides via nested patch)."""
+
+    def fake_judge(structured, chunks, callbacks=None):
+        return [
+            ClaimVerification(claim_index=i, verdict="SUPPORTED", reason="ok")
+            for i in range(len(structured.claims))
+        ]
+
+    with patch("src.generation.chain.judge_claims", side_effect=fake_judge):
+        yield
 
 
 class TestRunPipeline:
@@ -235,6 +250,107 @@ class TestRunPipeline:
         with pytest.raises(AnswerVerificationError, match="unrepairable"):
             _run_pipeline("test", MagicMock())
         assert mock_llm.call_count == 2
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_verification_status_verified(self, mock_llm, mock_retrieval):
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.return_value = (_json_answer(), None)
+
+        result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "verified"
+        assert result.verification["per_claim"][0]["verdict"] == "SUPPORTED"
+        assert result.verification["per_claim"][0]["text"] == "The fact holds."
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_judge_rejection_triggers_regen(self, mock_llm, mock_retrieval):
+        """One UNSUPPORTED round → feedback re-gen → verified, no exception."""
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.side_effect = [(_json_answer(), None), (_json_answer(), None)]
+        rounds = [
+            [ClaimVerification(claim_index=0, verdict="UNSUPPORTED", reason="not entailed")],
+            [ClaimVerification(claim_index=0, verdict="SUPPORTED", reason="ok")],
+        ]
+        with patch("src.generation.chain.judge_claims", side_effect=rounds):
+            result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "verified"
+        assert mock_llm.call_count == 2
+        assert "rejected by the verifier" in mock_llm.call_args[0][0]
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_persistent_rejection_ships_unverified(
+        self, mock_llm, mock_retrieval
+    ):
+        """Bounded retry: 1 + VERIFY_RETRY gens, then badge — never raise."""
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.return_value = (_json_answer(), None)
+        always_bad = [
+            ClaimVerification(claim_index=0, verdict="UNSUPPORTED", reason="nope")
+        ]
+        with patch(
+            "src.generation.chain.judge_claims",
+            side_effect=[always_bad] * (1 + VERIFY_RETRY),
+        ):
+            result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "unverified"
+        assert mock_llm.call_count == 1 + VERIFY_RETRY
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_judge_outage_skips_regen(self, mock_llm, mock_retrieval):
+        """Judge outage is not fixable by regenerating — no wasted re-gen."""
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.return_value = (_json_answer(), None)
+        outage = [
+            ClaimVerification(
+                claim_index=0, verdict="UNSUPPORTED", reason="judge unavailable: 503"
+            )
+        ]
+        with patch("src.generation.chain.judge_claims", side_effect=[outage]):
+            result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "unverified"
+        assert mock_llm.call_count == 1
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_abstained_skips_judge(self, mock_llm, mock_retrieval):
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.return_value = (
+            json.dumps(
+                {
+                    "claims": [],
+                    "abstained": True,
+                    "abstain_reason": "I don't have enough information to answer "
+                    "this question based on the provided sources.",
+                }
+            ),
+            None,
+        )
+        result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "abstained"
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_pipeline_partial_verdicts_reported(self, mock_llm, mock_retrieval):
+        mock_retrieval.return_value = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_llm.return_value = (_json_answer(), None)
+        rounds = [
+            [ClaimVerification(claim_index=0, verdict="PARTIAL", reason="half")],
+            [ClaimVerification(claim_index=0, verdict="PARTIAL", reason="half")],
+            [ClaimVerification(claim_index=0, verdict="PARTIAL", reason="half")],
+        ]
+        with patch("src.generation.chain.judge_claims", side_effect=rounds):
+            result = _run_pipeline("test", MagicMock())
+
+        assert result.verification["status"] == "partial"
+        assert mock_llm.call_count == 1 + VERIFY_RETRY
 
 
 class TestGenerate:

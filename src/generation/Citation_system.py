@@ -27,6 +27,7 @@ class CitedAnswer(BaseModel):
 
     answer: str
     sources: list[Source]
+    verification: dict | None = None
 
 
 JSON_CONTRACT = """Respond with ONLY one JSON object — no prose, no markdown fences:

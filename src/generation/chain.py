@@ -21,6 +21,12 @@ from src.generation.schema import (
     structured_to_prose,
     verify_quotes,
 )
+from src.generation.verifier import (
+    VERIFY_RETRY,
+    ClaimVerification,
+    build_verification,
+    judge_claims,
+)
 from src.generation.providers import (
     Provider,
     ProviderOverrides,
@@ -112,6 +118,57 @@ def _generate_structured(
     return parse_structured(raw), _merge_usage(usage, usage2)
 
 
+def _needs_repair(verifications: list[ClaimVerification]) -> bool:
+    """Retry generator for real rejections; a judge outage is not fixable
+    by regenerating, so `judge unavailable` verdicts skip the loop."""
+    return any(
+        v.verdict != "SUPPORTED" and not v.reason.startswith("judge unavailable")
+        for v in verifications
+    )
+
+
+def _generate_verified(
+    prompt: str,
+    chunks: list[dict],
+    provider_overrides: ProviderOverrides | None = None,
+    callbacks: list | None = None,
+) -> tuple[StructuredAnswer, list[ClaimVerification], dict[str, int] | None]:
+    """Generate → quote-verify → judge entailment, with bounded repair.
+
+    Judge rejections are fed back to the generator at most `VERIFY_RETRY`
+    times; persistent rejections ship as an `unverified`/`partial` badge —
+    never silently dropped, never a hard failure (PLAN PR-4b-ii).
+    """
+    structured, usage = _generate_structured(
+        prompt, chunks, provider_overrides=provider_overrides, callbacks=callbacks
+    )
+    verifications = judge_claims(structured, chunks, callbacks=callbacks)
+
+    attempts = 0
+    while attempts < VERIFY_RETRY and _needs_repair(verifications):
+        feedback = "\n".join(
+            f"- claim {v.claim_index} [{v.verdict}]: {v.reason}"
+            for v in verifications
+            if v.verdict != "SUPPORTED"
+            and not v.reason.startswith("judge unavailable")
+        )
+        repair_prompt = (
+            f"{prompt}\n\nYour previous claims were rejected by the verifier:\n"
+            f"{feedback}\nFix the claims to match the evidence, or abstain "
+            "entirely if they cannot be supported. Return the corrected JSON "
+            "object only."
+        )
+        logger.warning(f"Judge rejected claims, re-generating (attempt {attempts + 1}): {feedback}")
+        structured, round_usage = _generate_structured(
+            repair_prompt, chunks, provider_overrides=provider_overrides, callbacks=callbacks
+        )
+        usage = _merge_usage(usage, round_usage)
+        verifications = judge_claims(structured, chunks, callbacks=callbacks)
+        attempts += 1
+
+    return structured, verifications, usage
+
+
 def _invoke_llm(
     prompt: str,
     callbacks: list | None = None,
@@ -170,13 +227,17 @@ def _run_pipeline(
     citation_prompt = build_citation_prompt(query, top_chunks, workspace=workspace)
     logger.debug(f"Generated citation prompt: {citation_prompt}")
 
-    structured, _usage = _generate_structured(
+    structured, verifications, _usage = _generate_verified(
         citation_prompt, top_chunks, provider_overrides=provider_overrides
     )
     answer_text = structured_to_prose(structured)
 
     sources = _build_sources(top_chunks)
-    return CitedAnswer(answer=answer_text, sources=sources)
+    return CitedAnswer(
+        answer=answer_text,
+        sources=sources,
+        verification=build_verification(structured, verifications),
+    )
 
 
 def _generate_traced(
@@ -255,7 +316,7 @@ def _generate_traced(
                 metadata={"model": Config.GROQ_MODEL},
             ) as llm_span:
                 try:
-                    structured, usage = _generate_structured(
+                    structured, verifications, usage = _generate_verified(
                         citation_prompt,
                         top_chunks,
                         callbacks=[handler],
@@ -269,6 +330,7 @@ def _generate_traced(
                     output={
                         "claims": len(structured.claims),
                         "abstained": structured.abstained,
+                        "verifications": [v.model_dump() for v in verifications],
                         "answer_chars": len(answer_text),
                     },
                     metadata={"token_usage": usage} if usage else None,
@@ -277,6 +339,7 @@ def _generate_traced(
             # --- Citation verification (deterministic, traced) ---
             sources = _build_sources(top_chunks)
             problems = verify_quotes(structured, top_chunks)
+            verification = build_verification(structured, verifications)
 
             with root.start_as_current_observation(
                 name="citation-validation",
@@ -286,12 +349,15 @@ def _generate_traced(
                 val_span.update(
                     output={
                         "quote_verified": not problems,
+                        "verification_status": verification["status"],
                         "claims": len(structured.claims),
                         "abstained": structured.abstained,
                         "sources_count": len(sources),
                     }
                 )
-            cited = CitedAnswer(answer=answer_text, sources=sources)
+            cited = CitedAnswer(
+                answer=answer_text, sources=sources, verification=verification
+            )
 
             total_ms = (monotonic() - t0) * 1000
             root.update(
@@ -299,6 +365,7 @@ def _generate_traced(
                     "answer": cited.answer,
                     "sources_count": len(cited.sources),
                     "claims": len(structured.claims),
+                    "verification_status": verification["status"],
                     "quote_verified": True,
                     "total_latency_ms": total_ms,
                 }
