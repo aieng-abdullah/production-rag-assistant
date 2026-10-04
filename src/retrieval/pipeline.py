@@ -18,6 +18,7 @@ def retrieval(
     top_k: int = 5,
     lf_retrieval_parent=None,
     tenant_id: str = DEFAULT_TENANT,
+    workspace: str | None = None,
 ) -> list[dict]:
     """
     Retrieve relevant text chunks from a vector database using embeddings,
@@ -25,6 +26,8 @@ def retrieval(
 
     lf_retrieval_parent: optional Langfuse retriever span; when set, records bm25 / vector /
     rrf / rerank as child retriever observations.
+    workspace: optional workspace filter (legal | academic) applied to the vector
+    predicate; the BM25 side is pre-filtered by the caller's index.
     """
     def _traced_step(name: str, fn):
         if lf_retrieval_parent is None:
@@ -57,7 +60,9 @@ def retrieval(
     try:
         vector_results = _traced_step(
             "vector-search",
-            lambda: vector_search(query, top_k=20, tenant_id=tenant_id),
+            lambda: vector_search(
+                query, top_k=20, tenant_id=tenant_id, workspace=workspace
+            ),
         )
         logger.info(f"Vector search returned {len(vector_results)} results")
 

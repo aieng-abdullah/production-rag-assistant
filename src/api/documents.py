@@ -7,7 +7,18 @@ hardening run before any disk write.
 
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from typing import Literal
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from loguru import logger
 
 from src.api.deps import quota_to_http, require_user
@@ -36,9 +47,9 @@ def _raw_dir(user_id: int) -> Path:
     return Config.DATA_DIR / "raw" / str(user_id)
 
 
-def _ingest(tenant_id: str, path: Path) -> None:
+def _ingest(tenant_id: str, path: Path, workspace: str = Config.DEFAULT_WORKSPACE) -> None:
     """Seam: tests monkeypatch this instead of running the embedder."""
-    RAGService().ingest(tenant_id, path)
+    RAGService().ingest(tenant_id, path, workspace=workspace)
 
 
 def _delete_chunks(tenant_id: str, doc_id: str) -> None:
@@ -71,11 +82,16 @@ def recover_stale_documents() -> int:
     return stale
 
 
-def process_document(user_id: int, document_id: int, path: Path) -> None:
+def process_document(
+    user_id: int,
+    document_id: int,
+    path: Path,
+    workspace: str = Config.DEFAULT_WORKSPACE,
+) -> None:
     """BackgroundTasks callback — ingest, then mark ready/failed and refresh BM25."""
     tenant = str(user_id)
     try:
-        _ingest(tenant, path)
+        _ingest(tenant, path, workspace=workspace)
     except Exception as exc:
         logger.error(f"Ingest failed doc={path.name} tenant={tenant}: {exc}")
         _set_status(document_id, "failed")
@@ -98,9 +114,13 @@ def _document_payload(row: Document) -> dict:
 def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    workspace: Literal["legal", "academic"] = Form(Config.DEFAULT_WORKSPACE),
     user_id: int = Depends(require_user),
 ) -> dict:
-    """Save PDF, queue ingestion, return `processing` status for polling."""
+    """Save PDF, queue ingestion, return `processing` status for polling.
+
+    `workspace` tags every chunk's metadata (legal | academic) so retrieval
+    filters by niche (PLAN PR-4)."""
     try:
         filename = sanitize_filename(file.filename or "")
     except ValueError as exc:
@@ -136,7 +156,7 @@ def upload_document(
         path.unlink(missing_ok=True)
         raise quota_to_http(exc) from exc
 
-    background_tasks.add_task(process_document, user_id, document_id, path)
+    background_tasks.add_task(process_document, user_id, document_id, path, workspace)
     logger.info(f"Upload queued doc={path.name} tenant={user_id} bytes={len(payload)}")
     return {"id": document_id, "filename": path.name, "status": "processing"}
 

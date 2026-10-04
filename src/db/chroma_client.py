@@ -18,12 +18,28 @@ _vectorstore: Optional[Chroma] = None
 DEFAULT_TENANT = "default"
 
 
-def _backfill_tenant_metadata(collection) -> None:
-    """Idempotent metadata normalization (PLAN.md PR-1).
+def metadata_where(tenant_id: str, workspace: str | None = None) -> dict:
+    """Chroma `where` predicate: tenant partition + optional workspace niche.
 
-    Chunks written before tenant scoping lack the `tenant_id` partition key,
-    so `where={"tenant_id": ...}` predicates would silently exclude them.
-    Tags every legacy chunk with DEFAULT_TENANT on client init.
+    `workspace=None` keeps the legacy tenant-only predicate (tests, eval,
+    default flow).
+    """
+    if workspace is None:
+        return {"tenant_id": tenant_id}
+    return {
+        "$and": [
+            {"tenant_id": {"$eq": tenant_id}},
+            {"workspace": {"$eq": workspace}},
+        ]
+    }
+
+
+def _backfill_metadata(collection) -> None:
+    """Idempotent metadata normalization (PLAN.md PR-1 + PR-4).
+
+    Legacy chunks lack `tenant_id` (would vanish from tenant predicates)
+    or `workspace` (would vanish from workspace predicates). Tags them with
+    DEFAULT_TENANT / DEFAULT_WORKSPACE on client init.
     """
     results = collection.get(include=["metadatas"])
     ids = results.get("ids") or []
@@ -31,13 +47,20 @@ def _backfill_tenant_metadata(collection) -> None:
     stale_ids: list = []
     stale_metas: list = []
     for chunk_id, meta in zip(ids, metadatas):
-        if meta is not None and "tenant_id" not in meta:
+        if meta is None:
+            continue
+        patch = {}
+        if "tenant_id" not in meta:
+            patch["tenant_id"] = DEFAULT_TENANT
+        if "workspace" not in meta:
+            patch["workspace"] = Config.DEFAULT_WORKSPACE
+        if patch:
             stale_ids.append(chunk_id)
-            stale_metas.append({**meta, "tenant_id": DEFAULT_TENANT})
+            stale_metas.append({**meta, **patch})
     if stale_ids:
         collection.update(ids=stale_ids, metadatas=stale_metas)
         logger.info(
-            f"Backfilled tenant_id={DEFAULT_TENANT!r} on {len(stale_ids)} legacy chunks"
+            f"Backfilled tenant/workspace keys on {len(stale_ids)} legacy chunks"
         )
 
 
@@ -51,7 +74,7 @@ def _get_vectorstore() -> Chroma:
             embedding_function=embedding_model,
             persist_directory=str(Config.CHROMA_DIR),
         )
-        _backfill_tenant_metadata(_vectorstore._collection)
+        _backfill_metadata(_vectorstore._collection)
         logger.info(f"LangChain Chroma initialized: {Config.COLLECTION_NAME}")
     return _vectorstore
 
@@ -84,6 +107,7 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
                 "page_num": chunk.get("page_num", -1),
                 "chunk_index": chunk.get("chunk_index", -1),
                 "tenant_id": tenant_id,
+                "workspace": chunk.get("workspace", Config.DEFAULT_WORKSPACE),
             }
         )
         documents.append(doc)
@@ -99,15 +123,17 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
     return len(chunks)
 
 
-def load_all_chunks(tenant_id: str = DEFAULT_TENANT) -> List[Dict]:
+def load_all_chunks(
+    tenant_id: str = DEFAULT_TENANT, workspace: str | None = None
+) -> List[Dict]:
     """
-    Load all chunks for one tenant from the vectorstore.
-    Tenant predicate (`where={"tenant_id": ...}`) is enforced server-side.
+    Load chunks for one tenant (optionally one workspace) from the vectorstore.
+    Predicate is enforced server-side via `metadata_where`.
     """
     vectorstore = _get_vectorstore()
     collection = vectorstore._collection
 
-    results = collection.get(where={"tenant_id": tenant_id})
+    results = collection.get(where=metadata_where(tenant_id, workspace))
     chunks = []
     for text, metadata in zip(results["documents"], results["metadatas"]):
         chunks.append({
@@ -123,15 +149,17 @@ def has_chunks(tenant_id: str = DEFAULT_TENANT) -> bool:
     return count_chunks(tenant_id) > 0
 
 
-def count_chunks(tenant_id: str = DEFAULT_TENANT) -> int:
-    """Return the tenant's chunk count without loading documents.
+def count_chunks(
+    tenant_id: str = DEFAULT_TENANT, workspace: str | None = None
+) -> int:
+    """Return the tenant's (optionally workspace's) chunk count.
 
     chromadb >=1.x `Collection.count()` dropped the `where` parameter, so
-    the tenant predicate runs through `get(include=[])` (ids only).
+    the predicate runs through `get(include=[])` (ids only).
     """
     vectorstore = _get_vectorstore()
     collection = vectorstore._collection
-    results = collection.get(where={"tenant_id": tenant_id}, include=[])
+    results = collection.get(where=metadata_where(tenant_id, workspace), include=[])
     return len(results.get("ids") or [])
 
 

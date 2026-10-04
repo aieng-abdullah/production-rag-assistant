@@ -7,7 +7,7 @@ def _fake_pipeline(monkeypatch, chunks):
     """Count builds; return a stable sentinel per build."""
     calls = {"load": 0, "build": 0}
 
-    def fake_load(tenant_id):
+    def fake_load(tenant_id, workspace=None):
         calls["load"] += 1
         return chunks
 
@@ -64,4 +64,18 @@ def test_invalidate_unknown_tenant_is_noop():
 
     cache.invalidate("never-seen")
 
-    assert "never-seen" not in cache._cache
+    assert not cache._cache
+
+
+def test_workspaces_of_one_tenant_have_separate_indexes(monkeypatch):
+    """(tenant, workspace) keys: legal index never reused for academic."""
+    _fake_pipeline(monkeypatch, [{"page_content": "x"}])
+
+    legal = cache.get_bm25("tenant-a", "legal")
+    academic = cache.get_bm25("tenant-a", "academic")
+
+    assert legal != academic
+    assert cache.get_bm25("tenant-a", "legal") is legal
+
+    cache.invalidate("tenant-a")
+    assert not cache._cache

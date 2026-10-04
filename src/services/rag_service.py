@@ -11,9 +11,11 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.config import Config
 from src.db.chroma_client import DEFAULT_TENANT, get_collection
 from src.generation.Citation_system import CitedAnswer
 from src.generation.chain import generate
+from src.generation.profiles import get_prompt_version
 from src.generation.providers import ProviderOverrides
 from src.ingestion.pipeline import ingest as _ingest_pipeline
 
@@ -23,10 +25,15 @@ __all__ = ["RAGService", "DEFAULT_TENANT"]
 class RAGService:
     """Stateless facade over ingestion, generation, and document storage."""
 
-    def ingest(self, tenant_id: str, path: str | Path) -> dict:
+    def ingest(
+        self,
+        tenant_id: str,
+        path: str | Path,
+        workspace: str = Config.DEFAULT_WORKSPACE,
+    ) -> dict:
         """Run the full PDF pipeline. Returns {"pages": int, "chunks": int}."""
-        logger.info(f"Ingest tenant={tenant_id} path={path}")
-        return _ingest_pipeline(str(path), tenant_id=tenant_id)
+        logger.info(f"Ingest tenant={tenant_id} workspace={workspace} path={path}")
+        return _ingest_pipeline(str(path), tenant_id=tenant_id, workspace=workspace)
 
     def generate_answer(
         self,
@@ -34,14 +41,21 @@ class RAGService:
         query: str,
         bm25_index,
         provider_overrides: ProviderOverrides | None = None,
+        workspace: str = Config.DEFAULT_WORKSPACE,
     ) -> CitedAnswer:
-        """Generate a citation-validated answer scoped to `tenant_id`."""
-        logger.debug(f"Query tenant={tenant_id}")
+        """Generate a citation-validated answer scoped to `tenant_id` + `workspace`."""
+        logger.debug(
+            "Query tenant={} workspace={} prompt={}",
+            tenant_id,
+            workspace,
+            get_prompt_version(workspace),
+        )
         return generate(
             query,
             bm25_index,
             provider_overrides=provider_overrides,
             tenant_id=tenant_id,
+            workspace=workspace,
         )
 
     def list_documents(self, tenant_id: str) -> list[str]:

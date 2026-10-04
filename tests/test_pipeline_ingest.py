@@ -151,3 +151,49 @@ class TestIngestErrors:
         mock_upsert.side_effect = RuntimeError("storage failed")
         with pytest.raises(RuntimeError, match="Failed to store chunks"):
             ingest("/fake/doc.pdf")
+
+
+class TestWorkspaceStamping:
+    """PLAN PR-4: every chunk carries the ingest workspace."""
+
+    @patch("src.ingestion.pipeline.upsert_chunks")
+    @patch("src.ingestion.pipeline.embed_chunks")
+    @patch("src.ingestion.pipeline.extract_pages")
+    def test_defaults_to_academic(self, mock_extract, mock_embed, mock_upsert):
+        mock_extract.return_value = [{"text": "A" * 200, "page_num": 1, "doc_id": "d1"}]
+        mock_embed.side_effect = lambda chunks: chunks
+        mock_upsert.return_value = 1
+
+        ingest("/fake/doc.pdf")
+
+        passed = mock_embed.call_args[0][0]
+        assert passed and all(c["workspace"] == "academic" for c in passed)
+
+    @patch("src.ingestion.pipeline.upsert_chunks")
+    @patch("src.ingestion.pipeline.embed_chunks")
+    @patch("src.ingestion.pipeline.extract_pages")
+    def test_stamps_requested_workspace(self, mock_extract, mock_embed, mock_upsert):
+        mock_extract.return_value = [{"text": "A" * 200, "page_num": 1, "doc_id": "d1"}]
+        mock_embed.side_effect = lambda chunks: chunks
+        mock_upsert.return_value = 1
+
+        ingest("/fake/doc.pdf", workspace="legal")
+
+        passed = mock_embed.call_args[0][0]
+        assert passed and all(c["workspace"] == "legal" for c in passed)
+
+    @patch("src.ingestion.pipeline.upsert_chunks")
+    @patch("src.ingestion.pipeline.embed_chunks")
+    @patch("src.ingestion.pipeline.extract_pages")
+    def test_upsert_receives_stamped_chunks(
+        self, mock_extract, mock_embed, mock_upsert
+    ):
+        """Stamp must survive embed → reach upsert_chunks metadata source."""
+        mock_extract.return_value = [{"text": "A" * 200, "page_num": 1, "doc_id": "d1"}]
+        mock_embed.side_effect = lambda chunks: chunks
+        mock_upsert.return_value = 1
+
+        ingest("/fake/doc.pdf", workspace="legal")
+
+        upserted = mock_upsert.call_args[0][0]
+        assert all(c["workspace"] == "legal" for c in upserted)

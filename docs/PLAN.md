@@ -89,23 +89,40 @@ Branch: `feat/api`
 
 ### PR-4 — Workspaces (two niches, one engine)
 Branch: `feat/workspaces`
-- [ ] Workspace profiles: `legal` (statute/section citation prompt, strict abstain),
-      `academic` (paper/page, current behavior)
-- [ ] Same pipeline, different `build_citation_prompt(profile)` + source-type filter
-- [ ] Demo corpora: Contract Act 1872 + 2-3 arXiv papers
-- [ ] Workspace-scoped tests for both profiles
+- [x] Workspace profiles: `legal` (statute/section citation prompt, strict abstain),
+      `academic` (paper/page, current behavior) — `src/generation/profiles.py`
+- [x] Same pipeline, different `build_citation_prompt(workspace)` + source-type
+      filter (`workspace` metadata key, Chroma `$and` predicate, tuple-keyed
+      BM25 cache, server-side abstention in the citation validator)
+- [x] Demo corpora: Indian Evidence Act 1872 + 3 arXiv papers
+      (`scripts/fetch_demo_corpora.py`; Contract Act 1872 has no clean
+      machine-readable source — archive.org scan is OCR noise)
+- [x] Workspace-scoped tests for both profiles (predicates, forwarding,
+      stamping, profiles, abstention)
 **Hope:** one demo switches niches, legal prompt abstains on out-of-corpus.
 
 ### PR-4b — Citation Verifier + Provenance (agentic v1)
 Branch: `feat/citation-verifier`
-- [ ] Verifier: per-sentence entailment judge `SUPPORTED/PARTIAL/UNSUPPORTED`
+- [ ] Structured output schema (both workspaces, one validator): `claims[]` with
+      `citations[{source_id, verbatim quote}]`, `abstained: bool`, `abstain_reason`;
+      prose `[SOURCE N]` validator retired
+- [ ] Deterministic quote verification (whitespace/case-normalized containment,
+      range-checked source_ids) + sources resolved server-side from chunk
+      metadata — model never writes doc_id/page_num
+- [ ] Verifier: per-claim entailment judge `SUPPORTED/PARTIAL/UNSUPPORTED`
       (cheap model tier, separate prompt channel — injection hardened)
-- [ ] UNSUPPORTED → 1 retry → else `⚠ unverified` badge, never silent drop
-- [ ] Response shape + `verification{status, per_sentence[]}`
-- [ ] `AnswerTrace` persisted: queries issued, chunks retrieved/used/discarded,
-      verification events
+- [ ] UNSUPPORTED → retry with error feedback (bound ≤2) → else `⚠ unverified`
+      badge or abstain, never silent drop
+- [ ] Response shape + `verification{status, per_claim[]}`
+- [ ] `AnswerTrace` persisted: queries issued, chunks retrieved/used/discussed,
+      prompt version, model output, verification events
 - [ ] `GET /answers/{id}/trace`
+- [ ] Provenance metadata: pinpoint (page/section/paragraph), content hash,
+      doc date/version, jurisdiction; stable source numbering
 - [ ] Quota: verification = +1 unit (documented)
+- [ ] Regression eval set: proviso case, missing cross-ref, conflicting
+      sources, out-of-corpus → track citation precision/recall + abstention
+      accuracy before/after prompt changes
 - [ ] Tests: fake-judge unit tests, retry bound ≤2, trace shape, quota math
 **Hope:** Langfuse shows verifier spans; badge visible in UI; CI green.
 

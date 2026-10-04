@@ -14,6 +14,7 @@ from src.config import Config
 from src.db.chroma_client import count_chunks, has_chunks
 from src.generation.providers import ProviderOverrides
 from src.services import DEFAULT_TENANT, RAGService
+from src.services.bm25_cache import get_bm25
 from ui_core import (
     apply_workspace_accent,
     brand_html,
@@ -70,8 +71,10 @@ def handle_query(query: str) -> None:
         st.warning("Please upload a PDF in the Documents page first.")
         return
 
-    if st.session_state.bm25_index is None:
-        st.warning("BM25 index not ready. Process a PDF first.")
+    workspace = st.session_state.workspace
+    bm25 = get_bm25(DEFAULT_TENANT, workspace)
+    if bm25 is None:
+        st.warning(f"No documents indexed for the '{workspace}' workspace yet.")
         return
 
     st.session_state.messages.append({"role": "user", "content": query})
@@ -82,8 +85,9 @@ def handle_query(query: str) -> None:
                 cited_answer = rag_service.generate_answer(
                     tenant_id=DEFAULT_TENANT,
                     query=query,
-                    bm25_index=st.session_state.bm25_index,
+                    bm25_index=bm25,
                     provider_overrides=_ui_provider_overrides(),
+                    workspace=workspace,
                 )
 
                 display_cited_answer(cited_answer)
@@ -131,7 +135,7 @@ def render_sidebar() -> None:
 
     st.sidebar.selectbox(
         "Workspace",
-        options=["legal", "academic"],
+        options=list(Config.WORKSPACES),
         key="workspace",
         on_change=_on_workspace_change,
         help="Legal and Academic profiles share one engine (PLAN PR-4)",
@@ -160,8 +164,6 @@ def render_sidebar() -> None:
         st.sidebar.divider()
         st.sidebar.markdown("### Stats")
         st.sidebar.caption(f"Total chunks: {count_chunks()}")
-        if st.session_state.bm25_index:
-            st.sidebar.caption("BM25 index: ready")
 
     st.sidebar.divider()
     st.sidebar.markdown("### LLM Providers")

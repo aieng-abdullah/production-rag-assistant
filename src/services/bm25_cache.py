@@ -1,7 +1,9 @@
 """Per-tenant BM25 TTL cache (PLAN.md PR-3, moved from PR-1).
 
-Built lazily from ChromaDB chunks on first query per tenant; invalidated
-on ingest/delete. TTL bounds staleness when a worker misses an invalidation.
+Keyed by (tenant_id, workspace) — each niche keeps its own index so the
+legal corpus never leaks into academic retrieval (PLAN PR-4). Built lazily
+from ChromaDB chunks on first use; invalidated on ingest/delete for every
+workspace of that tenant. TTL bounds staleness on missed invalidations.
 """
 
 from cachetools import TTLCache
@@ -18,23 +20,27 @@ MAX_TENANTS = 128
 _cache: TTLCache = TTLCache(maxsize=MAX_TENANTS, ttl=TTL_SECONDS)
 
 
-def get_bm25(tenant_id: str):
-    """Return the tenant's BM25 index, building it on cache miss.
+def get_bm25(tenant_id: str, workspace: str | None = None):
+    """Return the tenant's BM25 index for `workspace`, building on cache miss.
 
     Caches `None` for empty tenants too (membership check, not None check).
     """
-    if tenant_id in _cache:
-        return _cache[tenant_id]
-    chunks = load_all_chunks(tenant_id)
+    key = (tenant_id, workspace)
+    if key in _cache:
+        return _cache[key]
+    chunks = load_all_chunks(tenant_id, workspace=workspace)
     index = build_bm25_index(chunks) if chunks else None
-    _cache[tenant_id] = index
-    logger.debug("BM25 built tenant={} chunks={}", tenant_id, len(chunks))
+    _cache[key] = index
+    logger.debug(
+        "BM25 built tenant={} workspace={} chunks={}", tenant_id, workspace, len(chunks)
+    )
     return index
 
 
 def invalidate(tenant_id: str) -> None:
-    """Drop one tenant's index — call after ingest or delete."""
-    _cache.pop(tenant_id, None)
+    """Drop every workspace index of one tenant — call after ingest or delete."""
+    for key in [k for k in _cache if k[0] == tenant_id]:
+        _cache.pop(key, None)
     logger.debug("BM25 invalidated tenant={}", tenant_id)
 
 

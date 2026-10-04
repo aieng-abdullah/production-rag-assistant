@@ -99,12 +99,13 @@ def _run_pipeline(
     bm25_index,
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
+    workspace: str = Config.DEFAULT_WORKSPACE,
 ) -> CitedAnswer:
     """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
-    top_chunks = retrieval(query, bm25_index, tenant_id=tenant_id)
+    top_chunks = retrieval(query, bm25_index, tenant_id=tenant_id, workspace=workspace)
     logger.debug(f"Retrieved {len(top_chunks)} top chunks")
 
-    citation_prompt = build_citation_prompt(query, top_chunks)
+    citation_prompt = build_citation_prompt(query, top_chunks, workspace=workspace)
     logger.debug(f"Generated citation prompt: {citation_prompt}")
 
     answer_text, _ = _invoke_llm(citation_prompt, provider_overrides=provider_overrides)
@@ -119,6 +120,7 @@ def _generate_traced(
     lf,
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
+    workspace: str = Config.DEFAULT_WORKSPACE,
 ) -> CitedAnswer:
     """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
@@ -136,8 +138,11 @@ def _generate_traced(
             input={
                 "query": query,
                 "top_k": Config.TOP_K_RERANK,
-                "corpus_chunk_count": count_chunks(tenant_id=tenant_id),
+                "corpus_chunk_count": count_chunks(
+                    tenant_id=tenant_id, workspace=workspace
+                ),
                 "tenant_id": tenant_id,
+                "workspace": workspace,
             },
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
@@ -145,9 +150,20 @@ def _generate_traced(
             with root.start_as_current_observation(
                 name="retrieval",
                 as_type="retriever",
-                input={"query": query, "corpus_chunk_count": count_chunks(tenant_id=tenant_id)},
+                input={
+                    "query": query,
+                    "corpus_chunk_count": count_chunks(
+                        tenant_id=tenant_id, workspace=workspace
+                    ),
+                },
             ) as retr:
-                top_chunks = retrieval(query, bm25_index, lf_retrieval_parent=retr, tenant_id=tenant_id)
+                top_chunks = retrieval(
+                    query,
+                    bm25_index,
+                    lf_retrieval_parent=retr,
+                    tenant_id=tenant_id,
+                    workspace=workspace,
+                )
                 logger.debug(f"Retrieved {len(top_chunks)} top chunks")
                 retr.update(output={"chunks_retrieved": len(top_chunks)})
 
@@ -156,7 +172,9 @@ def _generate_traced(
                 name="prompt-build",
                 as_type="span",
             ) as pb:
-                citation_prompt = build_citation_prompt(query, top_chunks)
+                citation_prompt = build_citation_prompt(
+                    query, top_chunks, workspace=workspace
+                )
                 logger.debug(f"Generated citation prompt: {citation_prompt}")
                 pb.update(output={"prompt_chars": len(citation_prompt)})
 
@@ -221,9 +239,14 @@ def generate(
     bm25_index,
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
+    workspace: str = Config.DEFAULT_WORKSPACE,
 ) -> CitedAnswer:
     """Generate a cited answer for the given query using the RAG pipeline."""
     lf = get_langfuse_client()
     if lf is None:
-        return _run_pipeline(query, bm25_index, provider_overrides, tenant_id)
-    return _generate_traced(query, bm25_index, lf, provider_overrides, tenant_id)
+        return _run_pipeline(
+            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+        )
+    return _generate_traced(
+        query, bm25_index, lf, provider_overrides, tenant_id, workspace=workspace
+    )
