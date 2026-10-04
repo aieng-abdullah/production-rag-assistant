@@ -1,11 +1,12 @@
-"""FastAPI dependencies (PLAN.md PR-2b)."""
+"""FastAPI dependencies (PLAN.md PR-2b/PR-3)."""
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.api.security import TokenError, decode_token
+from src.services.quotas import QuotaExceeded
 
-__all__ = ["require_user"]
+__all__ = ["require_user", "quota_to_http"]
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -38,3 +39,13 @@ def require_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
+
+
+def quota_to_http(exc: QuotaExceeded) -> HTTPException:
+    """429 with a clear message; `Retry-After` when the quota resets daily."""
+    headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=str(exc),
+        headers=headers,
+    )
