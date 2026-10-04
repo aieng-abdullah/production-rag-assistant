@@ -4,11 +4,14 @@ Response shape matches today's Streamlit app exactly: `answer` +
 `sources[{doc_id, page_num, text}]` (PR-6 swaps the client, not the shape).
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.api.deps import quota_to_http, require_user
+from src.config import Config
 from src.db.database import session_scope
 from src.services import RAGService
 from src.services.bm25_cache import get_bm25
@@ -25,13 +28,15 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
+    workspace: Literal["legal", "academic"] = Config.DEFAULT_WORKSPACE
 
 
 @router.post("")
 def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     """Tenant-scoped answer. 429 on exhausted daily quota; the quota slot
     is reserved atomically BEFORE generation and refunded on failure
-    (failed generations are free)."""
+    (failed generations are free). `workspace` picks the niche: prompt
+    profile + retrieval filter (PLAN PR-4)."""
     tenant = str(user_id)
     try:
         with session_scope() as session:
@@ -41,7 +46,10 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
 
     try:
         cited = RAGService().generate_answer(
-            tenant, body.query, bm25_index=get_bm25(tenant)
+            tenant,
+            body.query,
+            bm25_index=get_bm25(tenant, body.workspace),
+            workspace=body.workspace,
         )
     except Exception as exc:
         try:

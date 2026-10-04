@@ -47,11 +47,14 @@ def headers():
 
 
 def _fake_generate(monkeypatch, cited: CitedAnswer = FAKE_ANSWER):
-    monkeypatch.setattr("src.api.chat.get_bm25", lambda tenant: None)
+    monkeypatch.setattr(
+        "src.api.chat.get_bm25", lambda tenant, workspace=None: None
+    )
     monkeypatch.setattr(
         RAGService,
         "generate_answer",
-        lambda self, tenant, query, bm25_index=None, provider_overrides=None: cited,
+        lambda self, tenant, query, bm25_index=None, provider_overrides=None,
+        workspace="academic": cited,
     )
 
 
@@ -89,6 +92,42 @@ def test_chat_returns_app_shape(client, headers, monkeypatch):
     ]
 
 
+def test_chat_forwards_legal_workspace(client, headers, monkeypatch):
+    """PR-4: request workspace reaches both bm25 index and generate_answer."""
+    seen: dict = {}
+
+    def fake_get_bm25(tenant, workspace=None):
+        seen["bm25"] = (tenant, workspace)
+        return None
+
+    def fake_generate(
+        self, tenant, query, bm25_index=None, provider_overrides=None,
+        workspace="academic",
+    ):
+        seen["gen"] = workspace
+        return FAKE_ANSWER
+
+    monkeypatch.setattr("src.api.chat.get_bm25", fake_get_bm25)
+    monkeypatch.setattr(RAGService, "generate_answer", fake_generate)
+
+    response = client.post(
+        "/chat", json={"query": "q", "workspace": "legal"}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert seen == {"bm25": ("1", "legal"), "gen": "legal"}
+
+
+def test_chat_rejects_unknown_workspace(client, headers, monkeypatch):
+    _fake_generate(monkeypatch)
+
+    response = client.post(
+        "/chat", json={"query": "q", "workspace": "medical"}, headers=headers
+    )
+
+    assert response.status_code == 422
+
+
 def test_chat_records_usage_on_success(client, headers, monkeypatch):
     _fake_generate(monkeypatch)
 
@@ -121,9 +160,12 @@ def test_chat_quota_counts_today_only(client, headers, monkeypatch):
 
 
 def test_chat_failed_generation_502_and_free(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.chat.get_bm25", lambda tenant: None)
+    monkeypatch.setattr(
+        "src.api.chat.get_bm25", lambda tenant, workspace=None: None
+    )
 
-    def boom(self, tenant, query, bm25_index=None, provider_overrides=None):
+    def boom(self, tenant, query, bm25_index=None, provider_overrides=None,
+             workspace="academic"):
         raise RuntimeError("llm down")
 
     monkeypatch.setattr(RAGService, "generate_answer", boom)

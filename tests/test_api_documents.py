@@ -92,7 +92,7 @@ def test_upload_rejects_non_pdf_extension(client, headers):
 
 
 def test_upload_sanitizes_traversal_path(client, headers, api, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
 
     response = _upload(client, headers, name="sub/../../evil report.pdf")
 
@@ -104,7 +104,7 @@ def test_upload_sanitizes_traversal_path(client, headers, api, monkeypatch):
 
 
 def test_upload_marks_ready_after_background_ingest(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
 
     response = _upload(client, headers)
 
@@ -116,8 +116,44 @@ def test_upload_marks_ready_after_background_ingest(client, headers, monkeypatch
     assert polled.json()["status"] == "ready"
 
 
+def test_upload_forwards_workspace_to_ingest(client, headers, monkeypatch):
+    """PR-4: form field `workspace` flows into the ingest seam."""
+    seen: dict = {}
+
+    def fake_ingest(tenant, path, workspace=None):
+        seen["ws"] = workspace
+
+    monkeypatch.setattr("src.api.documents._ingest", fake_ingest)
+
+    response = client.post(
+        "/documents",
+        files={"file": ("paper.pdf", PDF_BYTES, "application/pdf")},
+        data={"workspace": "legal"},
+        headers=headers,
+    )
+
+    assert response.status_code == 202
+    assert seen["ws"] == "legal"
+
+
+def test_upload_rejects_unknown_workspace(client, headers, monkeypatch):
+    monkeypatch.setattr(
+        "src.api.documents._ingest",
+        lambda tenant, path, workspace=None: None,
+    )
+
+    response = client.post(
+        "/documents",
+        files={"file": ("paper.pdf", PDF_BYTES, "application/pdf")},
+        data={"workspace": "medical"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
 def test_upload_marks_failed_when_ingest_raises(client, headers, monkeypatch):
-    def boom(tenant, path):
+    def boom(tenant, path, workspace=None):
         raise RuntimeError("corrupt pdf")
 
     monkeypatch.setattr("src.api.documents._ingest", boom)
@@ -186,7 +222,7 @@ def test_startup_marks_stale_processing_as_failed(api, headers):
 
 
 def test_duplicate_filename_gets_unique_path(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
 
     first = _upload(client, headers, name="dup.pdf")
     second = _upload(client, headers, name="dup.pdf")
@@ -215,7 +251,7 @@ def test_get_document_404_for_other_tenant(client, headers):
 
 
 def test_delete_document_removes_row_and_file(client, headers, monkeypatch):
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
     monkeypatch.setattr("src.api.documents._delete_chunks", lambda tenant, doc: None)
     uploaded = _upload(client, headers, name="gone.pdf")
     file_path = Config.DATA_DIR / "raw" / "1" / "gone.pdf"
@@ -241,7 +277,7 @@ def test_delete_survives_vectorstore_failure(client, headers, monkeypatch):
     def chunks_boom(tenant, doc_id):
         raise RuntimeError("chroma down")
 
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path: None)
+    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
     monkeypatch.setattr("src.api.documents._delete_chunks", chunks_boom)
     uploaded = _upload(client, headers)
 

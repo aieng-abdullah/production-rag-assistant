@@ -9,9 +9,8 @@ import streamlit as st
 from loguru import logger
 
 from menu import menu_with_redirect
-from src.db.chroma_client import load_all_chunks
-from src.retrieval.bm25_index import build_bm25_index
 from src.services import DEFAULT_TENANT, RAGService
+from src.services.bm25_cache import invalidate
 from ui_core import apply_workspace_accent, init_session_state, load_css, page_config
 
 DATA_DIR = Path("data/raw")
@@ -35,18 +34,16 @@ def save_uploaded_file(uploaded_file) -> Path:
 
 
 def process_pdf(file_path: Path) -> None:
-    """Ingest PDF, rebuild BM25, announce completion with a toast."""
-    with st.spinner(f"Processing {file_path.name}..."):
+    """Ingest PDF into the active workspace, refresh the BM25 cache."""
+    workspace = st.session_state.workspace
+    with st.spinner(f"Processing {file_path.name} into '{workspace}'..."):
         progress_bar = st.progress(0)
         try:
-            result = rag_service.ingest(DEFAULT_TENANT, file_path)
-            progress_bar.progress(50)
-
-            chunks = load_all_chunks()
+            result = rag_service.ingest(
+                DEFAULT_TENANT, file_path, workspace=workspace
+            )
             progress_bar.progress(75)
-
-            if chunks:
-                st.session_state.bm25_index = build_bm25_index(chunks)
+            invalidate(DEFAULT_TENANT)
             progress_bar.progress(100)
 
             if file_path.name not in st.session_state.ingested_docs:
@@ -54,13 +51,13 @@ def process_pdf(file_path: Path) -> None:
 
             st.success(
                 f"Processed {result['pages']} pages, "
-                f"{result['chunks']} chunks"
+                f"{result['chunks']} chunks into '{workspace}'"
             )
             st.toast(
                 f"{file_path.name} indexed",
                 icon=":material/check_circle:",
             )
-            logger.info(f"PDF processed: {file_path.name}")
+            logger.info(f"PDF processed: {file_path.name} workspace={workspace}")
 
         except Exception as e:
             st.error(f"Error processing PDF: {e}")
@@ -108,11 +105,8 @@ def render_documents() -> None:
         ):
             try:
                 rag_service.delete_document(DEFAULT_TENANT, doc_id)
-                # BM25 must drop the deleted chunks too.
-                chunks = load_all_chunks()
-                st.session_state.bm25_index = (
-                    build_bm25_index(chunks) if chunks else None
-                )
+                # All workspace BM25 indexes must drop the deleted chunks.
+                invalidate(DEFAULT_TENANT)
                 st.toast(
                     f"{doc_id} deleted",
                     icon=":material/delete:",
