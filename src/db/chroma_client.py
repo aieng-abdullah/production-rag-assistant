@@ -96,18 +96,23 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
     """
     vectorstore = _get_vectorstore()
 
-    # Convert chunks to LangChain Documents
+    # Convert chunks to LangChain Documents.
+    # Full metadata passes through (provenance keys — PR-4b-iv); only the
+    # partition key `tenant_id` is authoritative server-side, and
+    # `workspace` falls back to the configured default when absent.
     documents = []
     ids = []
     for chunk in chunks:
         doc = Document(
             page_content=chunk["text"],
             metadata={
-                "doc_id": chunk.get("doc_id", "unknown"),
-                "page_num": chunk.get("page_num", -1),
-                "chunk_index": chunk.get("chunk_index", -1),
-                "tenant_id": tenant_id,
+                **{
+                    key: value
+                    for key, value in chunk.items()
+                    if key not in ("text", "embedding")
+                },
                 "workspace": chunk.get("workspace", Config.DEFAULT_WORKSPACE),
+                "tenant_id": tenant_id,
             }
         )
         documents.append(doc)

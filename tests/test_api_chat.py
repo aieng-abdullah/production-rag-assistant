@@ -117,9 +117,10 @@ def test_chat_returns_app_shape(client, headers, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == FAKE_ANSWER.answer
-    assert body["sources"] == [
-        {"doc_id": "contract_act", "page_num": 3, "text": "An agreement..."}
-    ]
+    assert len(body["sources"]) == 1
+    assert body["sources"][0]["doc_id"] == "contract_act"
+    assert body["sources"][0]["page_num"] == 3
+    assert body["sources"][0]["text"] == "An agreement..."
     assert body["verification"]["status"] == "verified"
     assert body["verification"]["per_claim"][0]["verdict"] == "SUPPORTED"
     assert body["answer_id"] == 1

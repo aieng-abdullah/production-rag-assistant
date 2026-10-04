@@ -13,7 +13,7 @@ from tenacity import (
 )
 
 from src.retrieval.pipeline import retrieval
-from src.generation.Citation_system import build_citation_prompt, CitedAnswer, Source
+from src.generation.Citation_system import build_citation_prompt, build_source, CitedAnswer, Source
 from src.generation.schema import (
     AnswerVerificationError,
     StructuredAnswer,
@@ -56,11 +56,11 @@ def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
 
 
 def _build_sources(chunks: list[dict]) -> list[Source]:
-    """Convert raw retrieval chunks into Source objects."""
-    return [
-        Source(doc_id=c["doc_id"], page_num=c["page_num"], text=c["text"])
-        for c in chunks
-    ]
+    """Convert raw retrieval chunks into Source objects.
+
+    Stable numbering: source_id = retrieval-rank position (1-based),
+    deterministic for a given corpus + query (RRF order is stable)."""
+    return [build_source(chunk, index + 1) for index, chunk in enumerate(chunks)]
 
 
 def _merge_usage(
