@@ -18,6 +18,17 @@ from src.services.bm25_cache import clear_all
 FAKE_ANSWER = CitedAnswer(
     answer="[SOURCE 1] The contract voids under section 23.",
     sources=[Source(doc_id="contract_act", page_num=3, text="An agreement...")],
+    verification={
+        "status": "verified",
+        "per_claim": [
+            {
+                "claim": 0,
+                "text": "The contract voids under section 23.",
+                "verdict": "SUPPORTED",
+                "reason": "entailed",
+            }
+        ],
+    },
 )
 
 
@@ -90,6 +101,8 @@ def test_chat_returns_app_shape(client, headers, monkeypatch):
     assert body["sources"] == [
         {"doc_id": "contract_act", "page_num": 3, "text": "An agreement..."}
     ]
+    assert body["verification"]["status"] == "verified"
+    assert body["verification"]["per_claim"][0]["verdict"] == "SUPPORTED"
 
 
 def test_chat_forwards_legal_workspace(client, headers, monkeypatch):
@@ -134,7 +147,8 @@ def test_chat_records_usage_on_success(client, headers, monkeypatch):
     client.post("/chat", json={"query": "q"}, headers=headers)
     usage = client.get("/usage", headers=headers).json()
 
-    assert usage["queries"]["used"] == 1
+    # Verified answer costs query + verify = 2 units.
+    assert usage["queries"]["used"] == 2
 
 
 def test_chat_429_when_daily_quota_exhausted(client, headers, monkeypatch):
@@ -150,13 +164,24 @@ def test_chat_429_when_daily_quota_exhausted(client, headers, monkeypatch):
 
 def test_chat_quota_counts_today_only(client, headers, monkeypatch):
     _fake_generate(monkeypatch)
-    _seed_query_events(19, age_days=0)
+    _seed_query_events(18, age_days=0)
     _seed_query_events(5, age_days=1)  # yesterday — must not count
 
     response = client.post("/chat", json={"query": "q"}, headers=headers)
 
     assert response.status_code == 200
     assert client.get("/usage", headers=headers).json()["queries"]["used"] == 20
+
+
+def test_chat_429_when_only_one_unit_left(client, headers, monkeypatch):
+    """Verified answers need 2 units — 19/20 used must reject the 20th."""
+    _fake_generate(monkeypatch)
+    _seed_query_events(19)
+
+    response = client.post("/chat", json={"query": "q"}, headers=headers)
+
+    assert response.status_code == 429
+    assert client.get("/usage", headers=headers).json()["queries"]["used"] == 19
 
 
 def test_chat_failed_generation_502_and_free(client, headers, monkeypatch):
