@@ -38,7 +38,9 @@ _bm25_index = None
 def _get_pipeline():
     global _bm25_index
     if _bm25_index is None:
-        chunks = load_all_chunks()
+        # Same workspace scope as generate()'s default vector filter —
+        # a tenant-wide index would fuse cross-workspace chunks (PR-4).
+        chunks = load_all_chunks(workspace=Config.DEFAULT_WORKSPACE)
         _bm25_index = build_bm25_index(chunks)
     return _bm25_index
 
