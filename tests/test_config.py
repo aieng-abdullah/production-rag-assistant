@@ -36,7 +36,7 @@ class TestConfigEnvVars:
         assert len(Config.GROQ_MODEL) > 0
 
     def test_groq_model_is_valid_groq_model(self):
-        valid_prefixes = ("llama", "mixtral", "gemma", "deepseek")
+        valid_prefixes = ("qwen", "llama", "openai/", "deepseek", "gemma", "mixtral")
         assert any(Config.GROQ_MODEL.startswith(p) for p in valid_prefixes)
 
 
