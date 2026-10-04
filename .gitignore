@@ -14,6 +14,7 @@ ENV/soucr
 data/chroma/
 data/raw/
 data/processed/
+data/demo/
 
 # OS
 .DS_Store
