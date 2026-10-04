@@ -47,9 +47,11 @@ def _upload(client, headers, name="paper.pdf", content=PDF_BYTES):
     )
 
 
-def _seed_document(user_id: int, filename: str = "seed.pdf") -> int:
+def _seed_document(
+    user_id: int, filename: str = "seed.pdf", status: str = "ready"
+) -> int:
     with session_scope() as session:
-        row = Document(user_id=user_id, filename=filename, status="ready")
+        row = Document(user_id=user_id, filename=filename, status=status)
         session.add(row)
         session.flush()
         return row.id
@@ -143,6 +145,44 @@ def test_upload_quota_storage_limit(client, headers, monkeypatch):
 
     assert response.status_code == 429
     assert "Storage quota" in response.json()["detail"]
+
+
+def test_post_write_storage_recheck_catches_race(client, headers, monkeypatch):
+    """Pre-check blind (simulates concurrent writer) → post-write check trips."""
+    monkeypatch.setattr(
+        "src.api.documents.check_document_quota", lambda session, uid, size: None
+    )
+    monkeypatch.setattr("src.services.quotas.STORAGE_LIMIT_BYTES", 0)
+
+    response = _upload(client, headers)
+
+    assert response.status_code == 429
+    assert not (Config.DATA_DIR / "raw" / "1" / "paper.pdf").exists()
+
+
+def test_conditional_insert_enforces_doc_limit(client, headers, monkeypatch):
+    """Pre-check blind (race) → atomic count+insert rejects, file rolled back."""
+    monkeypatch.setattr(
+        "src.api.documents.check_document_quota", lambda session, uid, size: None
+    )
+    for n in range(5):
+        _seed_document(user_id=1, filename=f"doc{n}.pdf")
+
+    response = _upload(client, headers)
+
+    assert response.status_code == 429
+    assert "Document quota" in response.json()["detail"]
+    assert not (Config.DATA_DIR / "raw" / "1" / "paper.pdf").exists()
+
+
+def test_startup_marks_stale_processing_as_failed(api, headers):
+    """Orphaned processing rows (crashed worker) fail loudly at boot."""
+    _seed_document(user_id=1, filename="stuck.pdf", status="processing")
+
+    with TestClient(api) as booting_client:
+        rows = booting_client.get("/documents", headers=headers).json()
+
+    assert rows[0]["status"] == "failed"
 
 
 def test_duplicate_filename_gets_unique_path(client, headers, monkeypatch):

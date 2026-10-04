@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from loguru import logger
 
 from src.api.deps import quota_to_http, require_user
-from src.api.uploads import is_pdf_magic, sanitize_filename, unique_path
+from src.api.uploads import claim_path, is_pdf_magic, sanitize_filename
 from src.config import Config
 from src.db.database import session_scope
 from src.db.models import Document
@@ -21,6 +21,8 @@ from src.services.quotas import (
     STORAGE_LIMIT_BYTES,
     QuotaExceeded,
     check_document_quota,
+    enforce_storage_quota,
+    reserve_document_slot,
 )
 
 __all__ = ["router"]
@@ -49,6 +51,24 @@ def _set_status(document_id: int, status_value: str) -> None:
         row = session.get(Document, document_id)
         if row is not None:
             row.status = status_value
+
+
+def recover_stale_documents() -> int:
+    """Startup sweep: orphaned `processing` rows (worker crash mid-ingest)
+    become `failed` so pollers don't hang forever. Returns rows recovered."""
+    with session_scope() as session:
+        stale = (
+            session.query(Document).filter(Document.status == "processing").count()
+        )
+        if stale:
+            (
+                session.query(Document)
+                .filter(Document.status == "processing")
+                .update({"status": "failed"}, synchronize_session=False)
+            )
+    if stale:
+        logger.warning("Recovered {stale} stale processing documents", stale=stale)
+    return stale
 
 
 def process_document(user_id: int, document_id: int, path: Path) -> None:
@@ -103,14 +123,18 @@ def upload_document(
 
     directory = _raw_dir(user_id)
     directory.mkdir(parents=True, exist_ok=True)
-    path = unique_path(directory, filename)
+    path = claim_path(directory, filename)
     path.write_bytes(payload)
 
-    with session_scope() as session:
-        row = Document(user_id=user_id, filename=path.name, status="processing")
-        session.add(row)
-        session.flush()
-        document_id = row.id
+    # Enforcement after the write: shared filesystem state closes the
+    # pre-write TOCTOU window; conditional insert enforces the 5-doc cap.
+    try:
+        enforce_storage_quota(user_id)
+        with session_scope() as session:
+            document_id = reserve_document_slot(session, user_id, path.name)
+    except QuotaExceeded as exc:
+        path.unlink(missing_ok=True)
+        raise quota_to_http(exc) from exc
 
     background_tasks.add_task(process_document, user_id, document_id, path)
     logger.info(f"Upload queued doc={path.name} tenant={user_id} bytes={len(payload)}")

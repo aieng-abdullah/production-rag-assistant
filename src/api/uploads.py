@@ -4,10 +4,11 @@ Framework-free; raises `ValueError` with a user-facing message — the API
 layer maps it to 400.
 """
 
+import os
 import re
 from pathlib import Path
 
-__all__ = ["PDF_MAGIC", "sanitize_filename", "is_pdf_magic", "unique_path"]
+__all__ = ["PDF_MAGIC", "sanitize_filename", "is_pdf_magic", "claim_path"]
 
 PDF_MAGIC = b"%PDF-"
 MAX_FILENAME_LEN = 200
@@ -38,15 +39,21 @@ def is_pdf_magic(head: bytes) -> bool:
     return head.startswith(PDF_MAGIC)
 
 
-def unique_path(directory: Path, name: str) -> Path:
-    """Avoid overwriting an existing upload: `report.pdf` → `report (1).pdf`."""
-    candidate = directory / name
-    if not candidate.exists():
-        return candidate
-    stem, suffix = candidate.stem, candidate.suffix
-    n = 1
+def claim_path(directory: Path, name: str) -> Path:
+    """Atomically claim a free path (`O_CREAT|O_EXCL`).
+
+    Closes the duplicate-name race: two concurrent uploads of `report.pdf`
+    get `report.pdf` and `report (1).pdf` — the kernel arbitrates, not a
+    exists()-then-write check. The empty file stays claimed; caller overwrites.
+    """
+    stem, suffix = Path(name).stem, Path(name).suffix
+    n = 0
     while True:
-        candidate = directory / f"{stem} ({n}){suffix}"
-        if not candidate.exists():
-            return candidate
-        n += 1
+        candidate = directory / (name if n == 0 else f"{stem} ({n}){suffix}")
+        try:
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            n += 1
+            continue
+        os.close(fd)
+        return candidate

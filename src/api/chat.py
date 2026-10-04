@@ -12,7 +12,11 @@ from src.api.deps import quota_to_http, require_user
 from src.db.database import session_scope
 from src.services import RAGService
 from src.services.bm25_cache import get_bm25
-from src.services.quotas import QuotaExceeded, check_query_quota, record_usage
+from src.services.quotas import (
+    QuotaExceeded,
+    refund_usage,
+    reserve_query_slot,
+)
 
 __all__ = ["router"]
 
@@ -25,12 +29,13 @@ class ChatRequest(BaseModel):
 
 @router.post("")
 def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
-    """Tenant-scoped answer. 429 on exhausted daily quota; usage recorded
-    only on success (failed generations are free)."""
+    """Tenant-scoped answer. 429 on exhausted daily quota; the quota slot
+    is reserved atomically BEFORE generation and refunded on failure
+    (failed generations are free)."""
     tenant = str(user_id)
     try:
         with session_scope() as session:
-            check_query_quota(session, user_id)
+            usage_id = reserve_query_slot(session, user_id)
     except QuotaExceeded as exc:
         raise quota_to_http(exc) from exc
 
@@ -39,14 +44,17 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
             tenant, body.query, bm25_index=get_bm25(tenant)
         )
     except Exception as exc:
+        try:
+            with session_scope() as session:
+                refund_usage(session, usage_id)
+        except Exception as refund_exc:
+            # Slot stays burned (quota leak, not auth issue) — never mask the 502.
+            logger.error(f"Quota refund failed usage={usage_id}: {refund_exc}")
         logger.error(f"Generation failed tenant={tenant}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Answer generation failed",
+            detail="Retrieval or generation failed",
         ) from exc
-
-    with session_scope() as session:
-        record_usage(session, user_id, "query")
 
     return {
         "answer": cited.answer,

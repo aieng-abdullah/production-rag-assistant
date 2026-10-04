@@ -5,14 +5,22 @@ No LLM-key validation here — Streamlit's `app.py` owns `Config.validate()`;
 this process must boot even when only auth endpoints are exercised.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
-from src.api.documents import router as documents_router
+from src.api.documents import recover_stale_documents, router as documents_router
 from src.api.usage import router as usage_router
 
 __all__ = ["create_app"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    recover_stale_documents()
+    yield
 
 
 def create_app() -> FastAPI:
@@ -20,6 +28,7 @@ def create_app() -> FastAPI:
         title="Citation-Verified RAG API",
         version="0.2.0",
         docs_url="/docs",
+        lifespan=lifespan,
     )
     app.include_router(auth_router)
     app.include_router(documents_router)
