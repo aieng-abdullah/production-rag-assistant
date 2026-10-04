@@ -87,6 +87,17 @@ Branch: `feat/api`
 - [x] Upload hardening: PDF magic bytes, size cap, filename sanitization
 **Hope:** full flow works via curl, quota 429 test green.
 
+### PR-3b — Data retention + configurable quotas
+Branch: `feat/data-retention`
+- [x] Raw PDFs purged after successful ingest (kept on failure for retry/debug);
+      API background task and Streamlit page behave identically
+- [x] Quota limits env-tunable: `DAILY_QUERY_LIMIT` (20), `DOCUMENT_LIMIT` (5),
+      `STORAGE_LIMIT_MB` (100) — `Config` → `src/services/quotas.py`
+- [x] `purge_tenant()` + `RAGService.delete_tenant_data()` — chunks + raw files
+      for one tenant (account-deletion seam)
+- [x] `.env.example` ships (README tracked-gap note removed)
+**Hope:** storage stops growing per ingest; quotas tunable without code change.
+
 ### PR-4 — Workspaces (two niches, one engine)
 Branch: `feat/workspaces`
 - [x] Workspace profiles: `legal` (statute/section citation prompt, strict abstain),

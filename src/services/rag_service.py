@@ -8,16 +8,18 @@ and writes. Legacy chunks without the partition key are backfilled to
 """
 
 from pathlib import Path
+import shutil
 
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import DEFAULT_TENANT, get_collection
+from src.db.chroma_client import DEFAULT_TENANT, get_collection, purge_tenant
 from src.generation.Citation_system import CitedAnswer
 from src.generation.chain import generate
 from src.generation.profiles import get_prompt_version
 from src.generation.providers import ProviderOverrides
 from src.ingestion.pipeline import ingest as _ingest_pipeline
+from src.services.bm25_cache import invalidate
 
 __all__ = ["RAGService", "DEFAULT_TENANT"]
 
@@ -79,3 +81,26 @@ class RAGService:
             }
         )
         logger.info(f"Deleted doc={doc_id} tenant={tenant_id}")
+
+    def delete_tenant_data(self, tenant_id: str) -> dict:
+        """Purge everything stored for one tenant (PR-3b account deletion).
+
+        Order: chunks first (vector store is the retryable side), raw files
+        after. Returns {"chunks": n, "files": m} for logging/tests.
+        """
+        chunks = purge_tenant(tenant_id)
+
+        files = 0
+        raw_dir = Config.DATA_DIR / "raw" / tenant_id
+        if raw_dir.is_dir():
+            files = sum(1 for p in raw_dir.iterdir() if p.is_file())
+            try:
+                shutil.rmtree(raw_dir)
+            except OSError as exc:
+                logger.warning(f"Raw dir purge failed dir={raw_dir}: {exc}")
+
+        invalidate(tenant_id)
+        logger.info(
+            f"Purged tenant={tenant_id} chunks={chunks} files={files}",
+        )
+        return {"chunks": chunks, "files": files}

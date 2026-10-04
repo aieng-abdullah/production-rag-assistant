@@ -99,7 +99,8 @@ def test_upload_sanitizes_traversal_path(client, headers, api, monkeypatch):
     assert response.status_code == 202
     assert response.json()["filename"] == "evil_report.pdf"
     data_dir = Config.DATA_DIR
-    assert (data_dir / "raw" / "1" / "evil_report.pdf").is_file()
+    # Ingest no-op succeeded → raw file purged (PR-3b), never written outside raw/.
+    assert not (data_dir / "raw" / "1" / "evil_report.pdf").exists()
     assert not (data_dir / "sub").exists()
 
 
@@ -114,6 +115,8 @@ def test_upload_marks_ready_after_background_ingest(client, headers, monkeypatch
     polled = client.get(f"/documents/{response.json()['id']}", headers=headers)
     assert polled.status_code == 200
     assert polled.json()["status"] == "ready"
+    # Chunks live → raw PDF purged (PR-3b).
+    assert not (Config.DATA_DIR / "raw" / "1" / "paper.pdf").exists()
 
 
 def test_upload_forwards_workspace_to_ingest(client, headers, monkeypatch):
@@ -162,6 +165,8 @@ def test_upload_marks_failed_when_ingest_raises(client, headers, monkeypatch):
     polled = client.get(f"/documents/{response.json()['id']}", headers=headers)
 
     assert polled.json()["status"] == "failed"
+    # Failed ingest keeps the raw file for retry/debug (PR-3b).
+    assert (Config.DATA_DIR / "raw" / "1" / "paper.pdf").is_file()
 
 
 def test_upload_quota_document_limit(client, headers):
@@ -221,8 +226,23 @@ def test_startup_marks_stale_processing_as_failed(api, headers):
     assert rows[0]["status"] == "failed"
 
 
-def test_duplicate_filename_gets_unique_path(client, headers, monkeypatch):
+def test_duplicate_filename_reused_after_purge(client, headers, monkeypatch):
+    """PR-3b: successful ingest removes the raw file, freeing its name."""
     monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+
+    first = _upload(client, headers, name="dup.pdf")
+    second = _upload(client, headers, name="dup.pdf")
+
+    assert first.json()["filename"] == "dup.pdf"
+    assert second.json()["filename"] == "dup.pdf"
+
+
+def test_duplicate_filename_gets_unique_path_while_file_exists(client, headers, monkeypatch):
+    """A kept file (failed ingest) still collides → claim_path suffixes it."""
+    def boom(tenant, path, workspace=None):
+        raise RuntimeError("ingest down")
+
+    monkeypatch.setattr("src.api.documents._ingest", boom)
 
     first = _upload(client, headers, name="dup.pdf")
     second = _upload(client, headers, name="dup.pdf")
@@ -254,14 +274,13 @@ def test_delete_document_removes_row_and_file(client, headers, monkeypatch):
     monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
     monkeypatch.setattr("src.api.documents._delete_chunks", lambda tenant, doc: None)
     uploaded = _upload(client, headers, name="gone.pdf")
-    file_path = Config.DATA_DIR / "raw" / "1" / "gone.pdf"
-    assert file_path.is_file()
 
     response = client.delete(f"/documents/{uploaded.json()['id']}", headers=headers)
 
     assert response.status_code == 200
     assert response.json() == {"deleted": "gone.pdf"}
-    assert not file_path.exists()
+    # Raw file was already purged at ingest (PR-3b); delete stays idempotent.
+    assert not (Config.DATA_DIR / "raw" / "1" / "gone.pdf").exists()
     assert client.get("/documents", headers=headers).json() == []
 
 
@@ -277,7 +296,11 @@ def test_delete_survives_vectorstore_failure(client, headers, monkeypatch):
     def chunks_boom(tenant, doc_id):
         raise RuntimeError("chroma down")
 
-    monkeypatch.setattr("src.api.documents._ingest", lambda tenant, path, workspace=None: None)
+    # Failed ingest keeps the raw file — the retryable state this test guards.
+    def ingest_boom(tenant, path, workspace=None):
+        raise RuntimeError("ingest down")
+
+    monkeypatch.setattr("src.api.documents._ingest", ingest_boom)
     monkeypatch.setattr("src.api.documents._delete_chunks", chunks_boom)
     uploaded = _upload(client, headers)
 

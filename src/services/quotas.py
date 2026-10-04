@@ -1,4 +1,7 @@
-"""Usage quotas (PLAN.md PR-3): 20 queries/day, 5 docs, 100MB storage.
+"""Usage quotas (PLAN.md PR-3/PR-3b): queries/day, docs, storage.
+
+Limits come from `Config` (env-tunable: `DAILY_QUERY_LIMIT`,
+`DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`).
 
 Framework-free: takes an open SQLAlchemy session, raises `QuotaExceeded`.
 HTTP mapping (429) lives in `src/api/`.
@@ -31,9 +34,9 @@ __all__ = [
     "storage_bytes",
 ]
 
-DAILY_QUERY_LIMIT = 20
-DOCUMENT_LIMIT = 5
-STORAGE_LIMIT_BYTES = 100 * 1024 * 1024  # 100MB
+DAILY_QUERY_LIMIT = Config.DAILY_QUERY_LIMIT
+DOCUMENT_LIMIT = Config.DOCUMENT_LIMIT
+STORAGE_LIMIT_BYTES = Config.STORAGE_LIMIT_MB * 1024 * 1024
 
 
 class QuotaExceeded(Exception):

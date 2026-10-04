@@ -317,3 +317,43 @@ def test_backfill_stamps_workspace_when_only_tenant_tagged(mock_embed, mock_chro
             {"doc_id": "d1", "tenant_id": "tenant-a", "workspace": "academic"}
         ],
     )
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
+def test_purge_tenant_deletes_across_workspaces(mock_embed, mock_chroma):
+    """PR-3b: tenant-only predicate — no workspace-partitioned leftovers."""
+    mock_vs = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": ["tenant-a::d1_chunk_0", "tenant-a::d2_chunk_3"]}
+    mock_vs._collection = mock_collection
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+
+    from src.db.chroma_client import purge_tenant
+    removed = purge_tenant("tenant-a")
+
+    assert removed == 2
+    # First get() is the backfill sweep on init; purge's own call is last.
+    purge_call = mock_collection.get.call_args_list[-1]
+    assert purge_call.kwargs == {"where": {"tenant_id": "tenant-a"}, "include": []}
+    mock_collection.delete.assert_called_once_with(
+        ids=["tenant-a::d1_chunk_0", "tenant-a::d2_chunk_3"]
+    )
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
+def test_purge_tenant_empty_returns_zero(mock_embed, mock_chroma):
+    mock_vs = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
+    mock_vs._collection = mock_collection
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+
+    from src.db.chroma_client import purge_tenant
+    removed = purge_tenant("ghost")
+
+    assert removed == 0
+    mock_collection.delete.assert_not_called()

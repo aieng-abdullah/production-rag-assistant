@@ -149,6 +149,21 @@ def has_chunks(tenant_id: str = DEFAULT_TENANT) -> bool:
     return count_chunks(tenant_id) > 0
 
 
+def purge_tenant(tenant_id: str) -> int:
+    """Delete every chunk for one tenant across all workspaces (PR-3b).
+
+    Returns the number of chunk ids removed. Predicate is tenant-only —
+    an account purge must not leave workspace-partitioned leftovers.
+    """
+    collection = get_collection()
+    ids = collection.get(where=metadata_where(tenant_id), include=[]).get("ids") or []
+    if not ids:
+        return 0
+    collection.delete(ids=ids)
+    logger.info(f"Purged {len(ids)} chunks tenant={tenant_id}")
+    return len(ids)
+
+
 def count_chunks(
     tenant_id: str = DEFAULT_TENANT, workspace: str | None = None
 ) -> int:
