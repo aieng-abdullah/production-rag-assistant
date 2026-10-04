@@ -78,13 +78,13 @@ Branch: `feat/data-layer`, `feat/auth`
 
 ### PR-3 — API endpoints + quotas
 Branch: `feat/api`
-- [ ] BM25 per-tenant TTL cache (`cachetools`), invalidate on ingest/delete
+- [x] BM25 per-tenant TTL cache (`cachetools`), invalidate on ingest/delete
       (moved from PR-1)
-- [ ] `POST /documents` → save `data/raw/{user_id}/` → bg task → `status=processing`
-- [ ] `GET /documents`, `GET /documents/{id}` (poll), `DELETE /documents/{id}`
-- [ ] `POST /chat` → same response shape as today's app
-- [ ] `GET /usage`; quotas: 20 queries/day, 5 docs, 100MB → 429 clear message
-- [ ] Upload hardening: PDF magic bytes, size cap, filename sanitization
+- [x] `POST /documents` → save `data/raw/{user_id}/` → bg task → `status=processing`
+- [x] `GET /documents`, `GET /documents/{id}` (poll), `DELETE /documents/{id}`
+- [x] `POST /chat` → same response shape as today's app
+- [x] `GET /usage`; quotas: 20 queries/day, 5 docs, 100MB → 429 clear message
+- [x] Upload hardening: PDF magic bytes, size cap, filename sanitization
 **Hope:** full flow works via curl, quota 429 test green.
 
 ### PR-4 — Workspaces (two niches, one engine)
