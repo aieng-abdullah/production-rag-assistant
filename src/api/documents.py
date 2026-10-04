@@ -82,6 +82,17 @@ def recover_stale_documents() -> int:
     return stale
 
 
+def _purge_raw(path: Path, tenant: str) -> None:
+    """Raw PDFs are ingest inputs only — drop them once chunks exist (PR-3b).
+
+    Kept on failed ingest (above path) so the upload stays retryable/debuggable.
+    """
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning(f"Raw purge failed path={path} tenant={tenant}: {exc}")
+
+
 def process_document(
     user_id: int,
     document_id: int,
@@ -98,6 +109,7 @@ def process_document(
         return
     _set_status(document_id, "ready")
     invalidate(tenant)
+    _purge_raw(path, tenant)
     logger.info(f"Document ready doc={path.name} tenant={tenant}")
 
 

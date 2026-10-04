@@ -45,6 +45,12 @@ def process_pdf(file_path: Path) -> None:
             progress_bar.progress(75)
             invalidate(DEFAULT_TENANT)
             progress_bar.progress(100)
+            # Chunks exist now; the raw PDF was only an ingest input (PR-3b).
+            # Purge failure must not fail the page — chunks are already live.
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning(f"Raw purge failed {file_path}: {exc}")
 
             if file_path.name not in st.session_state.ingested_docs:
                 st.session_state.ingested_docs.append(file_path.name)

@@ -288,12 +288,12 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-cp .env.example .env   # add GROQ_API_KEY (see note below)
+cp .env.example .env   # add GROQ_API_KEY (at minimum)
 
 streamlit run app.py
 ```
 
-> **Note:** `.env.example` does not exist yet (tracked gap). Until it ships, create `.env` manually with at least `GROQ_API_KEY=...`. Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_MODE=local`, `LOG_LEVEL`.
+Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`).
 
 Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (env or sidebar).
 

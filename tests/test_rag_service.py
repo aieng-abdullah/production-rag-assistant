@@ -130,3 +130,63 @@ class TestDeleteDocument:
 
         args = collection.delete.call_args.kwargs
         assert {"$and": [{"tenant_id": {"$eq": "tenant-b"}}, {"doc_id": {"$eq": "doc.pdf"}}]} == args["where"]
+
+
+class TestDeleteTenantData:
+    """PR-3b: account-deletion seam — chunks + raw files + BM25."""
+
+    @patch("src.services.rag_service.invalidate")
+    @patch("src.services.rag_service.purge_tenant")
+    def test_purges_chunks_raw_files_and_bm25(
+        self, mock_purge, mock_invalidate, service, tmp_path, monkeypatch
+    ):
+        from src.config import Config
+
+        mock_purge.return_value = 7
+        monkeypatch.setattr(Config, "DATA_DIR", tmp_path)
+        raw = tmp_path / "raw" / "tenant-a"
+        raw.mkdir(parents=True)
+        (raw / "a.pdf").write_bytes(b"%PDF")
+
+        result = service.delete_tenant_data("tenant-a")
+
+        mock_purge.assert_called_once_with("tenant-a")
+        assert not raw.exists()
+        mock_invalidate.assert_called_once_with("tenant-a")
+        assert result == {"chunks": 7, "files": 1}
+
+    @patch("src.services.rag_service.invalidate")
+    @patch("src.services.rag_service.purge_tenant")
+    def test_missing_raw_dir_still_purges_chunks(
+        self, mock_purge, mock_invalidate, service, tmp_path, monkeypatch
+    ):
+        from src.config import Config
+
+        mock_purge.return_value = 0
+        monkeypatch.setattr(Config, "DATA_DIR", tmp_path)
+
+        result = service.delete_tenant_data("ghost")
+
+        assert result == {"chunks": 0, "files": 0}
+        mock_invalidate.assert_called_once_with("ghost")
+
+    @patch("src.services.rag_service.shutil.rmtree")
+    @patch("src.services.rag_service.invalidate")
+    @patch("src.services.rag_service.purge_tenant")
+    def test_raw_dir_failure_does_not_raise(
+        self, mock_purge, mock_invalidate, mock_rmtree, service, tmp_path, monkeypatch
+    ):
+        """Chunk purge already succeeded — degraded raw purge logs and returns."""
+        from src.config import Config
+
+        mock_purge.return_value = 3
+        mock_rmtree.side_effect = OSError("disk gone")
+        monkeypatch.setattr(Config, "DATA_DIR", tmp_path)
+        raw = tmp_path / "raw" / "tenant-a"
+        raw.mkdir(parents=True)
+        (raw / "a.pdf").write_bytes(b"%PDF")
+
+        result = service.delete_tenant_data("tenant-a")
+
+        assert result == {"chunks": 3, "files": 1}
+        mock_invalidate.assert_called_once_with("tenant-a")

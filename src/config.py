@@ -59,6 +59,11 @@ class Config:
     TOP_K_RERANK = 5
     RRF_K = 60
 
+    # --- Quotas (PLAN PR-3b, env-tunable) ---
+    DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
+    DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))
+    STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
+
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
     DEFAULT_WORKSPACE = "academic"

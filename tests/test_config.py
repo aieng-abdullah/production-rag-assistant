@@ -86,3 +86,22 @@ class TestConfigConstraints:
 
     def test_reranker_model_is_nonempty(self):
         assert len(Config.RERANKER_MODEL) > 0
+
+
+class TestQuotaConfig:
+    """PLAN PR-3b: quota limits are env-tunable Config values."""
+
+    def test_quota_defaults_are_positive_ints(self):
+        assert isinstance(Config.DAILY_QUERY_LIMIT, int)
+        assert Config.DAILY_QUERY_LIMIT > 0
+        assert isinstance(Config.DOCUMENT_LIMIT, int)
+        assert Config.DOCUMENT_LIMIT > 0
+        assert isinstance(Config.STORAGE_LIMIT_MB, int)
+        assert Config.STORAGE_LIMIT_MB > 0
+
+    def test_quotas_module_derives_from_config(self):
+        from src.services import quotas
+
+        assert quotas.DAILY_QUERY_LIMIT == Config.DAILY_QUERY_LIMIT
+        assert quotas.DOCUMENT_LIMIT == Config.DOCUMENT_LIMIT
+        assert quotas.STORAGE_LIMIT_BYTES == Config.STORAGE_LIMIT_MB * 1024 * 1024
