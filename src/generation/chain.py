@@ -4,7 +4,6 @@ from time import monotonic
 from typing import Any
 
 from loguru import logger
-from pydantic import ValidationError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -15,6 +14,13 @@ from tenacity import (
 
 from src.retrieval.pipeline import retrieval
 from src.generation.Citation_system import build_citation_prompt, CitedAnswer, Source
+from src.generation.schema import (
+    AnswerVerificationError,
+    StructuredAnswer,
+    parse_structured,
+    structured_to_prose,
+    verify_quotes,
+)
 from src.generation.providers import (
     Provider,
     ProviderOverrides,
@@ -48,6 +54,62 @@ def _build_sources(chunks: list[dict]) -> list[Source]:
         Source(doc_id=c["doc_id"], page_num=c["page_num"], text=c["text"])
         for c in chunks
     ]
+
+
+def _merge_usage(
+    first: dict[str, int] | None, second: dict[str, int] | None
+) -> dict[str, int] | None:
+    """Sum token usage across the original call and its repair re-ask."""
+    if not first:
+        return second
+    if not second:
+        return first
+    return {key: first.get(key, 0) + second.get(key, 0) for key in set(first) | set(second)}
+
+
+def _collect_problems(raw: str, chunks: list[dict]) -> list[str]:
+    """Parse + quote-verify one model output; [] means clean."""
+    try:
+        parsed = parse_structured(raw)
+    except AnswerVerificationError as exc:
+        return [str(exc)]
+    return [
+        f"claim {problem['claim']} source {problem['source_id']}: {problem['issue']}"
+        for problem in verify_quotes(parsed, chunks)
+    ]
+
+
+def _generate_structured(
+    prompt: str,
+    chunks: list[dict],
+    provider_overrides: ProviderOverrides | None = None,
+    callbacks: list | None = None,
+) -> tuple[StructuredAnswer, dict[str, int] | None]:
+    """LLM → parse → deterministic quote verify, with ONE repair re-ask.
+
+    The repair re-send appends the exact verification failures; a second
+    failure raises `AnswerVerificationError` (never ships unverified prose).
+    """
+    raw, usage = _invoke_llm(
+        prompt, callbacks=callbacks, provider_overrides=provider_overrides
+    )
+    problems = _collect_problems(raw, chunks)
+    if not problems:
+        return parse_structured(raw), usage
+
+    logger.warning(f"Structured output needs repair: {problems}")
+    repair_prompt = (
+        f"{prompt}\n\nYour previous answer failed verification:\n"
+        + "\n".join(f"- {problem}" for problem in problems)
+        + "\nReturn the corrected JSON object only."
+    )
+    raw, usage2 = _invoke_llm(
+        repair_prompt, callbacks=callbacks, provider_overrides=provider_overrides
+    )
+    problems = _collect_problems(raw, chunks)
+    if problems:
+        raise AnswerVerificationError(f"unrepairable after 1 attempt: {problems}")
+    return parse_structured(raw), _merge_usage(usage, usage2)
 
 
 def _invoke_llm(
@@ -108,7 +170,10 @@ def _run_pipeline(
     citation_prompt = build_citation_prompt(query, top_chunks, workspace=workspace)
     logger.debug(f"Generated citation prompt: {citation_prompt}")
 
-    answer_text, _ = _invoke_llm(citation_prompt, provider_overrides=provider_overrides)
+    structured, _usage = _generate_structured(
+        citation_prompt, top_chunks, provider_overrides=provider_overrides
+    )
+    answer_text = structured_to_prose(structured)
 
     sources = _build_sources(top_chunks)
     return CitedAnswer(answer=answer_text, sources=sources)
@@ -189,43 +254,52 @@ def _generate_traced(
                 as_type="span",
                 metadata={"model": Config.GROQ_MODEL},
             ) as llm_span:
-                answer_text, usage = _invoke_llm(
-                    citation_prompt,
-                    callbacks=[handler],
-                    provider_overrides=provider_overrides,
-                )
+                try:
+                    structured, usage = _generate_structured(
+                        citation_prompt,
+                        top_chunks,
+                        callbacks=[handler],
+                        provider_overrides=provider_overrides,
+                    )
+                except AnswerVerificationError as exc:
+                    llm_span.update(level="ERROR", status_message=str(exc))
+                    raise
+                answer_text = structured_to_prose(structured)
                 llm_span.update(
-                    output={"answer_chars": len(answer_text) if answer_text else 0},
+                    output={
+                        "claims": len(structured.claims),
+                        "abstained": structured.abstained,
+                        "answer_chars": len(answer_text),
+                    },
                     metadata={"token_usage": usage} if usage else None,
                 )
 
-            # --- Citation validation ---
+            # --- Citation verification (deterministic, traced) ---
             sources = _build_sources(top_chunks)
+            problems = verify_quotes(structured, top_chunks)
 
             with root.start_as_current_observation(
                 name="citation-validation",
                 as_type="evaluator",
                 input={"answer_preview": (answer_text or "")[:300]},
             ) as val_span:
-                try:
-                    cited = CitedAnswer(answer=answer_text, sources=sources)
-                    val_span.update(
-                        output={"citation_valid": True, "sources_count": len(sources)}
-                    )
-                except ValidationError as e:
-                    val_span.update(
-                        level="ERROR",
-                        status_message=str(e),
-                        output={"citation_valid": False},
-                    )
-                    raise
+                val_span.update(
+                    output={
+                        "quote_verified": not problems,
+                        "claims": len(structured.claims),
+                        "abstained": structured.abstained,
+                        "sources_count": len(sources),
+                    }
+                )
+            cited = CitedAnswer(answer=answer_text, sources=sources)
 
             total_ms = (monotonic() - t0) * 1000
             root.update(
                 output={
                     "answer": cited.answer,
                     "sources_count": len(cited.sources),
-                    "citation_valid": True,
+                    "claims": len(structured.claims),
+                    "quote_verified": True,
                     "total_latency_ms": total_ms,
                 }
             )
