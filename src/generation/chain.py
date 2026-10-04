@@ -27,6 +27,7 @@ from src.generation.verifier import (
     build_verification,
     judge_claims,
 )
+from src.generation.profiles import get_prompt_version
 from src.generation.providers import (
     Provider,
     ProviderOverrides,
@@ -169,6 +170,39 @@ def _generate_verified(
     return structured, verifications, usage
 
 
+def _trace_payload(
+    workspace: str,
+    chunks: list[dict],
+    structured: StructuredAnswer,
+    verifications: list[ClaimVerification],
+    usage: dict[str, int] | None,
+) -> dict:
+    """Provenance record persisted with the answer (PLAN PR-4b-iii)."""
+    cited_ids = {
+        citation.source_id for claim in structured.claims for citation in claim.citations
+    }
+    return {
+        "workspace": workspace,
+        "prompt_version": get_prompt_version(workspace),
+        "model": Config.GROQ_MODEL,
+        "verify_model": Config.VERIFY_MODEL,
+        "token_usage": usage,
+        "chunks": [
+            {
+                "source_id": index + 1,
+                "doc_id": chunk.get("doc_id"),
+                "page_num": chunk.get("page_num"),
+                "cited": index + 1 in cited_ids,
+            }
+            for index, chunk in enumerate(chunks)
+        ],
+        "claims": [claim.model_dump() for claim in structured.claims],
+        "abstained": structured.abstained,
+        "abstain_reason": structured.abstain_reason,
+        "verification": build_verification(structured, verifications),
+    }
+
+
 def _invoke_llm(
     prompt: str,
     callbacks: list | None = None,
@@ -237,6 +271,7 @@ def _run_pipeline(
         answer=answer_text,
         sources=sources,
         verification=build_verification(structured, verifications),
+        trace=_trace_payload(workspace, top_chunks, structured, verifications, _usage),
     )
 
 
@@ -356,7 +391,12 @@ def _generate_traced(
                     }
                 )
             cited = CitedAnswer(
-                answer=answer_text, sources=sources, verification=verification
+                answer=answer_text,
+                sources=sources,
+                verification=verification,
+                trace=_trace_payload(
+                    workspace, top_chunks, structured, verifications, usage
+                ),
             )
 
             total_ms = (monotonic() - t0) * 1000

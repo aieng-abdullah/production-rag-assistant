@@ -25,6 +25,7 @@ from src.services.quotas import (
     reserve_query_slot,
     reserve_verify_slot,
 )
+from src.services.trace_store import persist_answer
 
 __all__ = ["router"]
 
@@ -74,7 +75,16 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
             detail="Retrieval or generation failed",
         ) from exc
 
+    answer_id: int | None = None
+    try:
+        with session_scope() as session:
+            answer_id = persist_answer(session, user_id, body.query, cited)
+    except Exception as exc:
+        # Provenance is non-critical — the answer ships with answer_id: null.
+        logger.warning(f"Answer trace persist failed tenant={tenant}: {exc}")
+
     return {
+        "answer_id": answer_id,
         "answer": cited.answer,
         "sources": [source.model_dump() for source in cited.sources],
         "verification": cited.verification,

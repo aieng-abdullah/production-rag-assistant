@@ -29,6 +29,25 @@ FAKE_ANSWER = CitedAnswer(
             }
         ],
     },
+    trace={
+        "workspace": "legal",
+        "prompt_version": "legal-v2",
+        "model": "test-model",
+        "verify_model": "test-judge",
+        "token_usage": {"input_tokens": 10, "output_tokens": 5},
+        "chunks": [
+            {"source_id": 1, "doc_id": "contract_act", "page_num": 3, "cited": True}
+        ],
+        "claims": [
+            {
+                "text": "The contract voids under section 23.",
+                "citations": [{"source_id": 1, "quote": "An agreement..."}],
+            }
+        ],
+        "abstained": False,
+        "abstain_reason": None,
+        "verification": {"status": "verified"},
+    },
 )
 
 
@@ -103,6 +122,7 @@ def test_chat_returns_app_shape(client, headers, monkeypatch):
     ]
     assert body["verification"]["status"] == "verified"
     assert body["verification"]["per_claim"][0]["verdict"] == "SUPPORTED"
+    assert body["answer_id"] == 1
 
 
 def test_chat_forwards_legal_workspace(client, headers, monkeypatch):
