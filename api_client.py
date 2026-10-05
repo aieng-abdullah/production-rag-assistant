@@ -10,6 +10,7 @@ test seams (httpx.MockTransport + monkeypatch).
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import httpx
@@ -20,9 +21,12 @@ from src.config import Config
 
 __all__ = [
     "APIError",
+    "anonymous_login",
     "ask",
+    "complete_demo_login",
     "delete_document",
     "demo_login",
+    "ensure_guest_session",
     "get_document",
     "list_documents",
     "usage",
@@ -50,7 +54,7 @@ def _token() -> str | None:
 
 
 def _session_clear() -> None:
-    for key in ("jwt", "user_id", "email", "avatar", "show_pricing_modal"):
+    for key in ("jwt", "user_id", "user_email", "avatar", "show_pricing_modal", "anon_tier"):
         st.session_state.pop(key, None)
 
 
@@ -94,6 +98,46 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
 def demo_login() -> dict:
     """POST /auth/demo — issue a token for the local demo account."""
     return _request("POST", "/auth/demo")
+
+
+def anonymous_login(device_id: str) -> dict:
+    """POST /auth/anonymous — per-device guest session (free tier)."""
+    return _request("POST", "/auth/anonymous", json={"device_id": device_id})
+
+
+def complete_demo_login() -> None:
+    """Demo sign-in + session keys — shared by login page and login wall.
+
+    Raises `APIError` on failure; callers surface `detail` to the UI.
+    """
+    body = demo_login()
+    st.session_state.jwt = body["token"]
+    st.session_state.user_id = str(body["user_id"])
+    st.session_state.user_email = body["email"]
+    st.session_state.anon_tier = False
+    st.session_state.show_pricing_modal = True
+
+
+def ensure_guest_session() -> None:
+    """Provision the per-device guest session on first use (free tier).
+
+    Device id is generated once per browser session and reused, so guest
+    quotas follow the device across Streamlit reruns. Raises `APIError`
+    when the backend is down or rejects the id.
+    """
+    if st.session_state.get("jwt"):
+        return
+    device_id = st.session_state.get("device_id")
+    if not device_id:
+        device_id = uuid.uuid4().hex
+        st.session_state.device_id = device_id
+    body = anonymous_login(device_id)
+    st.session_state.jwt = body["token"]
+    st.session_state.user_id = str(body["user_id"])
+    st.session_state.user_email = "Guest"
+    st.session_state.anon_tier = True
+    st.session_state.anon_queries = 0
+    logger.info("Guest session provisioned user_id={uid}", uid=body["user_id"])
 
 
 def ask(query: str, workspace: str) -> dict:

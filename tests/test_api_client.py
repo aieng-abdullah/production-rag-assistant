@@ -187,3 +187,96 @@ def test_non_json_error_body_uses_text(monkeypatch):
 
     assert exc.value.status == 500
     assert "Internal Server Error" in exc.value.detail
+
+
+# --- Session helpers (guest + demo) ---
+
+
+class _FakeSession(dict):
+    """SessionState stand-in: dict API plus attribute access."""
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+
+def _mount_session(monkeypatch) -> _FakeSession:
+    session = _FakeSession()
+    monkeypatch.setattr(api_client, "st", type("NS", (), {"session_state": session})())
+    return session
+
+
+def test_anonymous_login_posts_device_id(monkeypatch):
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.read()
+        return httpx.Response(
+            200, json={"token": "g", "user_id": 4, "email": "Guest", "tier": "anonymous"}
+        )
+
+    _mount(handler, monkeypatch, token=None)
+
+    body = api_client.anonymous_login("abcd1234")
+
+    assert b'"device_id":"abcd1234"' in captured["body"]
+    assert body["tier"] == "anonymous"
+
+
+def test_ensure_guest_session_provisions_once(monkeypatch):
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(
+            200, json={"token": "g", "user_id": 4, "email": "Guest", "tier": "anonymous"}
+        )
+
+    _mount(handler, monkeypatch, token=None)
+    session = _mount_session(monkeypatch)
+
+    api_client.ensure_guest_session()
+    api_client.ensure_guest_session()
+
+    assert calls == ["/auth/anonymous"]
+    assert session["jwt"] == "g"
+    assert session["anon_tier"] is True
+    assert session["user_email"] == "Guest"
+    assert len(session["device_id"]) == 32
+
+
+def test_ensure_guest_session_keeps_existing_jwt(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("no HTTP expected")
+
+    _mount(handler, monkeypatch, token=None)
+    session = _mount_session(monkeypatch)
+    session["jwt"] = "member-token"
+
+    api_client.ensure_guest_session()
+
+    assert session["jwt"] == "member-token"
+
+
+def test_complete_demo_login_sets_session(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/auth/demo"
+        return httpx.Response(
+            200, json={"token": "d", "user_id": 1, "email": "demo@local"}
+        )
+
+    _mount(handler, monkeypatch, token=None)
+    session = _mount_session(monkeypatch)
+    session["anon_tier"] = True
+
+    api_client.complete_demo_login()
+
+    assert session["jwt"] == "d"
+    assert session["user_email"] == "demo@local"
+    assert session["anon_tier"] is False
+    assert session["show_pricing_modal"] is True
