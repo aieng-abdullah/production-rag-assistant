@@ -5,10 +5,22 @@ the httpx/JWT swap to the API happens in PLAN PR-6 once PR-3 lands.
 """
 
 from pathlib import Path
+from threading import Lock, Thread
 
 import streamlit as st
+from loguru import logger
+
+from src.api.security import TokenError, decode_token
+from src.config import Config
+from src.db.database import session_scope
+from src.db.models import User
 
 STYLES_PATH = Path(__file__).parent / "styles" / "main.css"
+
+# Background RAG warm-up: one per process (file-watcher reloads re-import
+# this module, which is the only case it restarts — harmless).
+_warmup_lock = Lock()
+_warmup_started = False
 
 # Spec §3: the only allowed session keys (plus legacy provider keys until PR-6).
 _SESSION_DEFAULTS = {
@@ -20,6 +32,10 @@ _SESSION_DEFAULTS = {
     "doc_statuses": {},
     "quota": 0,
     "ingested_docs": [],
+    # Progressive auth wall: free anonymous queries, plan choice after login.
+    "anon_queries": 0,
+    "user_tier": "free",
+    "show_pricing_modal": False,
     "anthropic_key": "",
     "anthropic_model": "claude-sonnet-4-20250514",
     "openai_key": "",
@@ -38,6 +54,79 @@ def init_session_state() -> None:
     for key, default in _SESSION_DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = default
+
+
+def google_login_url() -> str | None:
+    """OAuth entrypoint on the API host; None while Google creds are absent."""
+    if not (Config.GOOGLE_CLIENT_ID and Config.GOOGLE_CLIENT_SECRET):
+        return None
+    return f"{Config.API_BASE_URL}/auth/google"
+
+
+def start_rag_warmup() -> None:
+    """Load the RAG stack in a background thread (~25s of torch/model work).
+
+    Runs while the visitor reads the login page, so the first chat render
+    finds imports/models already warm. Failures only cost the original
+    first-render latency — logged loudly, never raised into the UI.
+    """
+    global _warmup_started
+    with _warmup_lock:
+        if _warmup_started:
+            return
+        _warmup_started = True
+
+    def _warm() -> None:
+        try:
+            from src.retrieval.cross_encoder import _get_model as _reranker
+            from src.services import DEFAULT_TENANT, RAGService
+            from src.services.bm25_cache import get_bm25
+
+            RAGService()
+            get_bm25(DEFAULT_TENANT, Config.DEFAULT_WORKSPACE)
+            _reranker()
+            logger.info("RAG warm-up complete")
+        except Exception as exc:
+            logger.error("RAG warm-up failed (first query pays): {err}", err=exc)
+
+    Thread(target=_warm, daemon=True, name="rag-warmup").start()
+
+
+def _email_for_user(user_id: int) -> str | None:
+    """Best-effort email for the sidebar; sign-in survives a DB hiccup (logged)."""
+    try:
+        with session_scope() as session:
+            user = session.get(User, user_id)
+            return user.email if user is not None else None
+    except Exception as exc:
+        logger.error(
+            "Could not load email for user {uid}: {err}", uid=user_id, err=exc
+        )
+        return None
+
+
+def capture_oauth_token() -> bool:
+    """Consume `?token=` from the OAuth redirect (fragment bridge in app.py).
+
+    Stores JWT + identity, flags the pricing modal, then removes the param
+    so the token stops appearing in the URL/history. Returns True on a new
+    login. Bad/expired tokens are logged and dropped, never raised.
+    """
+    token = st.query_params.get("token")
+    if not token:
+        return False
+    del st.query_params["token"]
+    try:
+        user_id = decode_token(token)
+    except (TokenError, EnvironmentError) as exc:
+        logger.warning("OAuth token rejected: {err}", err=str(exc))
+        return False
+    st.session_state.jwt = token
+    st.session_state.user_id = str(user_id)
+    st.session_state.user_email = _email_for_user(user_id)
+    st.session_state.show_pricing_modal = True
+    logger.info("OAuth sign-in captured user_id={uid}", uid=user_id)
+    return True
 
 
 def load_css() -> None:
