@@ -1,6 +1,6 @@
-"""Settings — account, workspace default, provider keys, danger zone (spec §5).
+"""Settings — account, workspace default, danger zone (spec §5).
 
-Provider keys stay session-local until PR-6 moves calls behind the API.
+Provider keys are server-side since PR-6 (pages never touch LLM APIs).
 Danger-zone actions need the PR-2b auth service — disabled, never faked.
 """
 
@@ -33,37 +33,6 @@ with st.container(border=True):
         horizontal=True,
     )
     st.caption("Legal = navy accent, Academic = teal. Chat can switch per session.")
-
-# --- Provider keys ------------------------------------------------------
-st.subheader("LLM providers")
-st.caption("Groq is free and built in. Add your own key for other providers:")
-with st.container(border=True):
-    k1, k2 = st.columns(2)
-    k1.text_input(
-        "Anthropic API key",
-        type="password",
-        key="anthropic_key",
-        placeholder="sk-ant-…",
-    )
-    k1.selectbox(
-        "Anthropic model",
-        ["claude-sonnet-4-20250514"],
-        key="anthropic_model",
-        disabled=True,
-    )
-    k2.text_input(
-        "OpenAI API key",
-        type="password",
-        key="openai_key",
-        placeholder="sk-…",
-    )
-    k2.selectbox(
-        "OpenAI model",
-        ["gpt-4o"],
-        key="openai_model",
-        disabled=True,
-    )
-    st.caption("Keys live in this browser session only — never persisted.")
 
 # --- Danger zone --------------------------------------------------------
 st.subheader("Danger zone")

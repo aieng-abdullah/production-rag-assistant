@@ -16,7 +16,7 @@ from src.db.models import User
 
 STYLES_PATH = Path(__file__).parent / "styles" / "main.css"
 
-# Spec §3: the allowed session keys (plus legacy provider keys until PR-6).
+# Spec §3: the allowed session keys (PR-6: no provider keys — server-side).
 _SESSION_DEFAULTS = {
     "jwt": None,
     "user_email": None,
@@ -26,17 +26,11 @@ _SESSION_DEFAULTS = {
     "anon_tier": False,
     "workspace": "academic",
     "messages": [],
-    "doc_statuses": {},
     "quota": 0,
-    "ingested_docs": [],
     # Progressive auth wall: free anonymous queries, plan choice after login.
     "anon_queries": 0,
     "user_tier": "free",
     "show_pricing_modal": False,
-    "anthropic_key": "",
-    "anthropic_model": "claude-sonnet-4-20250514",
-    "openai_key": "",
-    "openai_model": "gpt-4o",
 }
 
 # Spec §4.2: workspace accents override the base --ws-accent token.

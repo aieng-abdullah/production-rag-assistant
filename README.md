@@ -290,12 +290,16 @@ pip install -r requirements.txt
 
 cp .env.example .env   # add GROQ_API_KEY (at minimum)
 
+# Terminal 1 — FastAPI backend (chat, documents, quotas)
+uvicorn src.api.app:app --host 0.0.0.0 --port 8001
+
+# Terminal 2 — Streamlit UI
 streamlit run app.py
 ```
 
-Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`).
+Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`), guest tier (`ANON_QUERY_LIMIT`, `ANON_DOCUMENT_LIMIT`), API address (`API_BASE_URL`, default `http://localhost:8001`).
 
-Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (env or sidebar).
+Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` in `.env` (the API process reads them — the UI never calls an LLM directly).
 
 ### Google OAuth setup (optional)
 
