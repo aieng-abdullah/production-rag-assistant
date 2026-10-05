@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from menu import menu_with_redirect
-from ui_core import init_session_state, load_css, page_config
+from ui_core import init_session_state, load_css, lottie, page_config
 
 page_config("Dashboard — RAG Research Assistant")
 init_session_state()
@@ -52,6 +52,9 @@ st.caption(
 # --- Answer history -----------------------------------------------------
 st.subheader("Answer history")
 if not turns:
+    _d_l, _d_anim, _d_r = st.columns([1, 2, 1])
+    with _d_anim:
+        lottie("waiting", height=150)
     st.info("No queries yet — ask something in Chat to build your history.")
 else:
     rows = [
