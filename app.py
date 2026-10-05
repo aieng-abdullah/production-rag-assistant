@@ -10,6 +10,7 @@ No `src.*` imports here (AGENTS.md guardrail).
 
 import streamlit as st
 
+from api_client import APIError, complete_demo_login
 from menu import AUTH_ENABLED, menu
 from ui_core import (
     capture_oauth_token,
@@ -18,7 +19,6 @@ from ui_core import (
     load_css,
     logo_mark,
     page_config,
-    start_rag_warmup,
 )
 
 # Fragment → query bridge: OAuth lands on /#token=..., Streamlit cannot read
@@ -41,7 +41,6 @@ try {
 page_config("Sign in — RAG Research Assistant")
 init_session_state()
 load_css()
-start_rag_warmup()  # torch/models load in background while user reads login
 st.html(_OAUTH_BRIDGE_JS, unsafe_allow_javascript=True)
 if capture_oauth_token():
     st.switch_page("pages/2_Chat.py")
@@ -98,11 +97,12 @@ with login_box:
                 use_container_width=True,
                 key="demo_continue",
             ):
-                st.session_state.jwt = "demo-token"
-                st.session_state.user_email = "demo@local"
-                st.session_state.user_id = "demo"
-                st.session_state.show_pricing_modal = True
-                st.switch_page("pages/2_Chat.py")
+                try:
+                    complete_demo_login()
+                except APIError as exc:
+                    st.error(exc.detail)
+                else:
+                    st.switch_page("pages/2_Chat.py")
 
         st.divider()
         st.page_link(

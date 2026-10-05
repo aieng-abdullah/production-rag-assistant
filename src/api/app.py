@@ -33,6 +33,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(auth_router)
+    # PLAN PR-6: demo sign-in exists only while demo mode resolves on —
+    # deployments with Google creds configured never expose /auth/demo.
+    if Config.ENABLE_DEMO_LOGIN == "on":
+        from src.api.auth import demo_router
+
+        app.include_router(demo_router)
     app.include_router(documents_router)
     app.include_router(chat_router)
     app.include_router(answers_router)

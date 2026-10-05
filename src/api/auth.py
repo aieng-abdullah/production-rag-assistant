@@ -14,6 +14,7 @@ from authlib.integrations.httpx_client import OAuth2Client
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from src.api.security import create_token
@@ -21,9 +22,11 @@ from src.config import Config
 from src.db.database import session_scope
 from src.db.models import User
 
-__all__ = ["router"]
+__all__ = ["router", "demo_router"]
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+# Registered by create_app only while ENABLE_DEMO_LOGIN resolves on (PR-6).
+demo_router = APIRouter(prefix="/auth", tags=["auth"])
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -146,3 +149,81 @@ def google_callback(
     response = RedirectResponse(f"{frontend}/#token={token}", status_code=status.HTTP_302_FOUND)
     response.delete_cookie(STATE_COOKIE)
     return response
+
+
+@demo_router.post("/demo")
+def demo_login() -> dict:
+    """Local demo account: upsert `demo@local`, issue a real HS256 JWT.
+
+    Lets the Streamlit UI authenticate like any other user (PR-6) without
+    Google creds. Registered only while ENABLE_DEMO_LOGIN resolves on —
+    404 otherwise. Moves the legacy `default`-tenant corpus to this user
+    on first sign-in so pre-API uploads stay visible. The token is never
+    logged (security gate 3)."""
+    if Config.ENABLE_DEMO_LOGIN != "on":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Demo login disabled"
+        )
+    if not Config.JWT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT_SECRET is not set",
+        )
+
+    from src.db.chroma_client import (  # lazy: keeps API boot off torch
+        DEFAULT_TENANT,
+        has_chunks,
+        reassign_tenant,
+    )
+
+    with session_scope() as session:
+        user = session.query(User).filter(User.email == "demo@local").first()
+        if user is None:
+            user = User(email="demo@local", name="Demo User")
+            session.add(user)
+        session.flush()
+        user_id = int(user.id)
+
+    if not has_chunks(str(user_id)):
+        moved = reassign_tenant(DEFAULT_TENANT, str(user_id))
+        if moved:
+            logger.info(f"Demo sign-in adopted {moved} legacy chunks")
+
+    token = create_token(user_id)
+    logger.info("Demo sign-in user_id={user_id}", user_id=user_id)
+    return {"token": token, "user_id": user_id, "email": "demo@local"}
+
+
+class AnonymousLogin(BaseModel):
+    """Guest device id — uuid4 hex from the browser, used as the account key."""
+
+    device_id: str = Field(pattern=r"^[a-z0-9-]{8,64}$")
+
+
+@router.post("/anonymous")
+def anonymous_login(body: AnonymousLogin) -> dict:
+    """Guest session (PLAN PR-6): upsert a per-device account, issue JWT.
+
+    Guests get their own tenant (uploads stay theirs) plus the smaller
+    guest quotas enforced by `src.services.quotas` tier limits. One row
+    per device id — no verification, no email, expires nothing; replace
+    with real sign-in at any time via the login wall.
+    """
+    if not Config.JWT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT_SECRET is not set",
+        )
+
+    email = f"anon-{body.device_id}@local"
+    with session_scope() as session:
+        user = session.query(User).filter(User.email == email).first()
+        if user is None:
+            user = User(email=email, name="Guest")
+            session.add(user)
+        session.flush()
+        user_id = int(user.id)
+
+    token = create_token(user_id)
+    logger.info("Anonymous sign-in user_id={user_id}", user_id=user_id)
+    return {"token": token, "user_id": user_id, "email": "Guest", "tier": "anonymous"}

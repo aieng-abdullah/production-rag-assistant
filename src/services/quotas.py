@@ -6,6 +6,10 @@ Limits come from `Config` (env-tunable: `DAILY_QUERY_LIMIT`,
 Framework-free: takes an open SQLAlchemy session, raises `QuotaExceeded`.
 HTTP mapping (429) lives in `src/api/`.
 
+Guest tier (PLAN PR-6): users provisioned by `POST /auth/anonymous` carry
+an `anon-…@local` email and get the smaller guest limits (3 queries,
+1 document); everyone else keeps the member limits.
+
 Concurrency: check+insert happen in ONE statement (`INSERT ... SELECT ...
 WHERE count < limit`). Under SQLite's single-writer lock that closes the
 check-then-act race. Postgres multi-worker needs SERIALIZABLE/advisory
@@ -18,14 +22,18 @@ from sqlalchemy import func, insert, literal, select
 from sqlalchemy.orm import Session
 
 from src.config import Config
-from src.db.models import Document, UsageEvent
+from src.db.models import Document, UsageEvent, User
 
 __all__ = [
+    "ANON_EMAIL_PREFIX",
     "QuotaExceeded",
     "DAILY_QUERY_LIMIT",
     "DOCUMENT_LIMIT",
     "STORAGE_LIMIT_BYTES",
+    "document_limit_for",
+    "is_anonymous",
     "queries_today",
+    "query_limit_for",
     "reserve_query_slot",
     "reserve_verify_slot",
     "refund_usage",
@@ -38,6 +46,12 @@ __all__ = [
 DAILY_QUERY_LIMIT = Config.DAILY_QUERY_LIMIT
 DOCUMENT_LIMIT = Config.DOCUMENT_LIMIT
 STORAGE_LIMIT_BYTES = Config.STORAGE_LIMIT_MB * 1024 * 1024
+ANON_DOCUMENT_LIMIT = Config.ANON_DOCUMENT_LIMIT
+# Guest query budget in usage UNITS: a verified answer burns query+verify
+# = 2 units (PLAN PR-4b), so ANON_QUERY_LIMIT free questions = 6 units.
+ANON_QUERY_LIMIT = Config.ANON_QUERY_LIMIT * 2
+# Marker set by POST /auth/anonymous — the guest tier selector.
+ANON_EMAIL_PREFIX = "anon-"
 
 
 class QuotaExceeded(Exception):
@@ -58,9 +72,31 @@ def _seconds_to_reset() -> int:
     return int((tomorrow - datetime.now(timezone.utc)).total_seconds())
 
 
-def _query_quota_error() -> QuotaExceeded:
+def is_anonymous(session: Session, user_id: int) -> bool:
+    """True for guest-tier accounts minted by POST /auth/anonymous.
+
+    Unknown user ids count as members (a valid JWT implies a row; this
+    only guards malformed/stale tokens).
+    """
+    email = session.query(User.email).filter(User.id == user_id).scalar()
+    return isinstance(email, str) and email.startswith(ANON_EMAIL_PREFIX)
+
+
+def query_limit_for(session: Session, user_id: int) -> int:
+    """Daily query-unit budget for this account's tier."""
+    return ANON_QUERY_LIMIT if is_anonymous(session, user_id) else DAILY_QUERY_LIMIT
+
+
+def document_limit_for(session: Session, user_id: int) -> int:
+    """Document-count budget for this account's tier."""
+    return (
+        ANON_DOCUMENT_LIMIT if is_anonymous(session, user_id) else DOCUMENT_LIMIT
+    )
+
+
+def _query_quota_error(limit: int) -> QuotaExceeded:
     return QuotaExceeded(
-        f"Daily query quota reached ({DAILY_QUERY_LIMIT} queries/day). "
+        f"Daily query quota reached ({limit} queries/day). "
         "Resets at 00:00 UTC.",
         retry_after=_seconds_to_reset(),
     )
@@ -90,7 +126,9 @@ def _reserve_unit(session: Session, user_id: int, kind: str) -> int:
     Single statement: the WHERE clause re-evaluates the combined
     query+verify count at insert time, so concurrent requests cannot both
     slip past the limit. Raises QuotaExceeded when no row was inserted.
+    The budget is the caller's tier limit (guest vs member).
     """
+    limit = query_limit_for(session, user_id)
     today = (
         select(func.count(UsageEvent.id))
         .where(
@@ -114,13 +152,13 @@ def _reserve_unit(session: Session, user_id: int, kind: str) -> int:
                 literal(kind),
                 literal(1),
                 literal(datetime.now(timezone.utc)),
-            ).where(today < DAILY_QUERY_LIMIT),
+            ).where(today < limit),
         )
         .returning(UsageEvent.id)
     )
     row = session.execute(stmt).first()
     if row is None:
-        raise _query_quota_error()
+        raise _query_quota_error(limit)
     return int(row[0])
 
 
@@ -165,14 +203,15 @@ def check_document_quota(session: Session, user_id: int, incoming_bytes: int) ->
 
     Best effort — enforcement is `reserve_document_slot` + `enforce_storage_quota`.
     """
+    limit = document_limit_for(session, user_id)
     docs = (
         session.query(func.count(Document.id))
         .filter(Document.user_id == user_id)
         .scalar()
     )
-    if int(docs or 0) >= DOCUMENT_LIMIT:
+    if int(docs or 0) >= limit:
         raise QuotaExceeded(
-            f"Document quota reached ({DOCUMENT_LIMIT} documents). "
+            f"Document quota reached ({limit} documents). "
             "Delete a document to upload another."
         )
     if storage_bytes(user_id) + incoming_bytes > STORAGE_LIMIT_BYTES:
@@ -185,9 +224,10 @@ def check_document_quota(session: Session, user_id: int, incoming_bytes: int) ->
 def reserve_document_slot(session: Session, user_id: int, filename: str) -> int:
     """Atomically count+insert the Document row; returns its id.
 
-    Same single-statement pattern as `reserve_query_slot` — the 5-doc
-    limit holds under concurrent uploads.
+    Same single-statement pattern as `reserve_query_slot` — the tier's
+    document limit holds under concurrent uploads.
     """
+    limit = document_limit_for(session, user_id)
     doc_count = (
         select(func.count(Document.id))
         .where(Document.user_id == user_id)
@@ -207,14 +247,14 @@ def reserve_document_slot(session: Session, user_id: int, filename: str) -> int:
                 literal(filename),
                 literal("processing"),
                 literal(datetime.now(timezone.utc)),
-            ).where(doc_count < DOCUMENT_LIMIT),
+            ).where(doc_count < limit),
         )
         .returning(Document.id)
     )
     row = session.execute(stmt).first()
     if row is None:
         raise QuotaExceeded(
-            f"Document quota reached ({DOCUMENT_LIMIT} documents). "
+            f"Document quota reached ({limit} documents). "
             "Delete a document to upload another."
         )
     return int(row[0])

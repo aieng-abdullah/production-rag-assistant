@@ -9,6 +9,7 @@ import os
 
 import streamlit as st
 
+from api_client import APIError, complete_demo_login
 from pricing_modal import maybe_show_pricing_modal
 from src.config import Config
 from ui_core import brand_html, google_login_url
@@ -114,8 +115,9 @@ def show_login_wall() -> None:
         use_container_width=True,
         key="wall_demo",
     ):
-        st.session_state.jwt = "demo-token"
-        st.session_state.user_email = "demo@local"
-        st.session_state.user_id = "demo"
-        st.session_state.show_pricing_modal = True
-        st.rerun()
+        try:
+            complete_demo_login()
+        except APIError as exc:
+            st.error(exc.detail)
+        else:
+            st.rerun()

@@ -7,7 +7,7 @@
 streamlit run app.py
 
 # Lint (same as CI)
-ruff check src tests app.py eval alembic
+ruff check src tests app.py eval alembic api_client.py
 
 # Local test gate (CI runs the same tests WITHOUT the coverage gate)
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
@@ -25,6 +25,7 @@ Single-app Streamlit project. No monorepo, no packages.
 
 ```
 app.py                        # Streamlit UI entrypoint
+api_client.py                 # httpx client pages use to reach the FastAPI backend (PR-6)
 src/
   config.py                   # Centralized config, reads .env, validates at startup
   ingestion/                  # PDF → chunks → embeddings → ChromaDB
@@ -51,7 +52,7 @@ tests/                        # Pytest suite
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
-1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic`
+1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic api_client.py`
 2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0`
 
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` are skipped).
@@ -76,7 +77,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
   merged work is `git revert` (commits always survive in `main` history;
   a deleted branch pointer loses nothing). Restore a deleted branch any
   time with `git branch <name> <sha>`.
-- Run `ruff check src tests app.py eval alembic` + the fast test command green locally before push (keep coverage ≥70%).
+- Run `ruff check src tests app.py eval alembic api_client.py` + the fast test command green locally before push (keep coverage ≥70%).
 
 ## Change Review Protocol (PR Contract)
 

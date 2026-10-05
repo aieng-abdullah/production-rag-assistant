@@ -1,11 +1,10 @@
 """Shared Streamlit wiring: session state, CSS, workspace accents.
 
-Interim state (pre-PR-6): pages still call the service layer directly —
-the httpx/JWT swap to the API happens in PLAN PR-6 once PR-3 lands.
+PR-6: pages reach the backend through `api_client` (httpx + JWT); this
+module owns session/OAuth plumbing and chrome only.
 """
 
 from pathlib import Path
-from threading import Lock, Thread
 
 import streamlit as st
 from loguru import logger
@@ -17,29 +16,21 @@ from src.db.models import User
 
 STYLES_PATH = Path(__file__).parent / "styles" / "main.css"
 
-# Background RAG warm-up: one per process (file-watcher reloads re-import
-# this module, which is the only case it restarts — harmless).
-_warmup_lock = Lock()
-_warmup_started = False
-
-# Spec §3: the only allowed session keys (plus legacy provider keys until PR-6).
+# Spec §3: the allowed session keys (PR-6: no provider keys — server-side).
 _SESSION_DEFAULTS = {
     "jwt": None,
     "user_email": None,
     "user_id": None,
+    # Guest tier (PLAN PR-6): stable per-browser device id + tier flag.
+    "device_id": None,
+    "anon_tier": False,
     "workspace": "academic",
     "messages": [],
-    "doc_statuses": {},
     "quota": 0,
-    "ingested_docs": [],
     # Progressive auth wall: free anonymous queries, plan choice after login.
     "anon_queries": 0,
     "user_tier": "free",
     "show_pricing_modal": False,
-    "anthropic_key": "",
-    "anthropic_model": "claude-sonnet-4-20250514",
-    "openai_key": "",
-    "openai_model": "gpt-4o",
 }
 
 # Spec §4.2: workspace accents override the base --ws-accent token.
@@ -61,35 +52,6 @@ def google_login_url() -> str | None:
     if not (Config.GOOGLE_CLIENT_ID and Config.GOOGLE_CLIENT_SECRET):
         return None
     return f"{Config.API_BASE_URL}/auth/google"
-
-
-def start_rag_warmup() -> None:
-    """Load the RAG stack in a background thread (~25s of torch/model work).
-
-    Runs while the visitor reads the login page, so the first chat render
-    finds imports/models already warm. Failures only cost the original
-    first-render latency — logged loudly, never raised into the UI.
-    """
-    global _warmup_started
-    with _warmup_lock:
-        if _warmup_started:
-            return
-        _warmup_started = True
-
-    def _warm() -> None:
-        try:
-            from src.retrieval.cross_encoder import _get_model as _reranker
-            from src.services import DEFAULT_TENANT, RAGService
-            from src.services.bm25_cache import get_bm25
-
-            RAGService()
-            get_bm25(DEFAULT_TENANT, Config.DEFAULT_WORKSPACE)
-            _reranker()
-            logger.info("RAG warm-up complete")
-        except Exception as exc:
-            logger.error("RAG warm-up failed (first query pays): {err}", err=exc)
-
-    Thread(target=_warm, daemon=True, name="rag-warmup").start()
 
 
 def _email_for_user(user_id: int) -> str | None:
@@ -124,6 +86,7 @@ def capture_oauth_token() -> bool:
     st.session_state.jwt = token
     st.session_state.user_id = str(user_id)
     st.session_state.user_email = _email_for_user(user_id)
+    st.session_state.anon_tier = False
     st.session_state.show_pricing_modal = True
     logger.info("OAuth sign-in captured user_id={uid}", uid=user_id)
     return True
