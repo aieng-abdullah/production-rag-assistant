@@ -174,6 +174,17 @@ Branch: `chore/infra-docs`
 - [ ] CHANGELOG.md + demo GIF
 **Hope:** `docker compose up` = working product for reviewer in one command.
 
+### PR-8 — README as product description
+Branch: `docs/readme-product` (after PR-7 — builds on its technical README)
+- [ ] First screen sells: hero tagline, problem → solution, not setup steps
+- [ ] Demo GIF / screenshots: chat answer with citations + verifier badge
+- [ ] Feature bullets in product language (citation-verified answers,
+      legal/academic workspaces, quota limits, free vs pro plans)
+- [ ] "Who it's for" audience section (researchers, lawyers, students)
+- [ ] Keep PR-7 quickstart + env table below the fold (technical depth stays)
+- [ ] Plans blurb matches the pricing modal: Free live, Pro coming soon
+**Hope:** visitor understands the product value in 10 seconds, then self-hosts.
+
 ## Phase 2 backlog (explicit, not v1)
 T2 reflective retrieval (LangGraph orchestrator) · T3 domain workflow agents ·
 Bangla embeddings · Bangla OCR · bKash · teams/orgs · SSE streaming · SPA
