@@ -14,32 +14,35 @@ One codebase, long-term commitment (2026→), all AI engineering skills applied.
 | Market          | Bangladesh-first, global/self-host friendly         |
 | Language        | English v1 → Bangla phase 2 (multilingual-e5 + OCR) |
 | Scope           | Multi-tenant, Google auth, free-tier quotas         |
-| Stack           | FastAPI backend + Streamlit thin client             |
+| Stack           | **Single Streamlit process** (direct service calls) |
 | Tenant isolation| Chroma metadata `tenant_id` filter                  |
-| Ingestion       | FastAPI BackgroundTasks, poll status                |
+| Ingestion       | In-process + progress bar (blocking, v1)            |
 | Billing         | Stripe env-flagged only — never on critical path    |
-| Auth            | Google OAuth (env-gated) → JWT                      |
+| Auth            | Session-state demo → Google OAuth (later, hosting)  |
 | Agentic v1      | Citation Verifier + Provenance trace (T1 + T4)      |
 | Backend DB      | Postgres (SQLite in tests) + Alembic                |
 
 ## Architecture
 
 ```
-Streamlit UI (thin client, httpx + JWT)
+streamlit run app.py        # the whole app — one process
         │
-FastAPI ├── /auth       Google OAuth → JWT
-        ├── /documents  upload → BackgroundTasks ingest, list, delete
-        ├── /chat       retrieve + generate + verify (tenant-scoped)
-        ├── /answers    /{id}/trace provenance
-        ├── /usage      quota stats
-        └── /billing    Stripe — only if STRIPE_* env set
-              │
-   Postgres (users, workspaces, docs, answers, usage)
-   Chroma (1 collection, tenant_id metadata)
-   files  data/raw/{tenant_id}/
+        ├── pages/            UI → src.services.RAGService (direct calls)
+        │
+   src/
+        ├── ingestion/        PDF → chunks → embeddings (blocking + progress)
+        ├── retrieval/        BM25 + vector → RRF → cross-encoder rerank
+        ├── generation/       citation prompts + Groq + Pydantic validation
+        ├── services/         RAGService facade, BM25 cache, rag warm-up
+        └── db/               Chroma (1 collection, tenant_id metadata)
+                                + SQLite (users, usage, answers)
+        files  data/raw/{tenant_id}/
 ```
 
-`src/` stays framework-free. Streamlit imports zero `src.*` after PR-6.
+`src/` stays framework-free (no Streamlit imports). Pages import
+`src.services` directly — single-process mode (PR-6.1; the earlier
+httpx/JWT split is reverted, restorable from history if hosting lands —
+see docs/case-studies/001-deployment-hosting-strategy.md).
 
 ## PR breakdown (one PR = one phase, merge-to-main tracer bullets)
 
@@ -163,6 +166,18 @@ Branch: `refactor/frontend-api-client`
       Google creds) + legacy `default`-tenant adoption on first demo sign-in
 **Hope:** `grep "from src" app.py` = empty; UX feels same as before.
 
+### PR-6.1 — Revert to single-process Streamlit (2026-10-05)
+Branch: `revert/streamlit-only`
+- [x] Pages call `src.services.RAGService` directly again (pre-PR-6 wiring)
+- [x] Delete `api_client.py`, `src/api/`, `src/services/quotas.py` and their
+      tests (restorable from git history — commits survive on main)
+- [x] Session-state demo auth + local quota counters; no backend process
+- [x] Rationale: no free host runs the API + ML backend —
+      docs/case-studies/001-deployment-hosting-strategy.md (open case)
+- [ ] Public demo works on Streamlit Cloud with `streamlit run app.py` only
+**Hope:** demo reachable at $0; hosting case study closes with the API
+decision (restore the split or stay single-process).
+
 ### PR-7 — Infra + business packaging
 Branch: `chore/infra-docs`
 - [ ] docker-compose: db(postgres:16) + api(uvicorn) + frontend(streamlit) + chroma
@@ -195,7 +210,7 @@ Bangla embeddings · Bangla OCR · bKash · teams/orgs · SSE streaming · SPA
 3. JWT secret env-only, no tokens logged (PR-2)
 4. Upload sanitization (PR-3)
 5. Webhook sig + env-gated routes + zero secrets in git (PR-5)
-6. Token memory-only (PR-6)
+6. Token memory-only (PR-6) — superseded by PR-6.1: tokens removed entirely
 7. Verifier prompt-injection hardened (PR-4b)
 
 ## Non-goals v1
