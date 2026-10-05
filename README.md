@@ -290,38 +290,12 @@ pip install -r requirements.txt
 
 cp .env.example .env   # add GROQ_API_KEY (at minimum)
 
-# Terminal 1 — FastAPI backend (chat, documents, quotas)
-uvicorn src.api.app:app --host 0.0.0.0 --port 8001
-
-# Terminal 2 — Streamlit UI
-streamlit run app.py
+streamlit run app.py   # the whole app — one process, no backend
 ```
 
-Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`), guest tier (`ANON_QUERY_LIMIT`, `ANON_DOCUMENT_LIMIT`), API address (`API_BASE_URL`, default `http://localhost:8001`).
+Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`), guest tier (`ANON_QUERY_LIMIT`).
 
-Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` in `.env` (the API process reads them — the UI never calls an LLM directly).
-
-### Google OAuth setup (optional)
-
-Sign-in is env-gated. Without credentials the API runs normally and
-`GET /auth/google` returns **501** with this hint.
-
-1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials → Create credentials → OAuth client ID** (Web application).
-2. Authorized redirect URI: `http://localhost:8501/auth/google/callback`
-   (override with `GOOGLE_REDIRECT_URI` if the port differs).
-3. Add to `.env`:
-
-```bash
-GOOGLE_CLIENT_ID=...        # from step 2
-GOOGLE_CLIENT_SECRET=...
-JWT_SECRET=...              # openssl rand -hex 32 — HS256 key, never committed
-FRONTEND_URL=http://localhost:8501   # post-login redirect target
-```
-
-Flow: `GET /auth/google` → consent screen → `/auth/google/callback` → JWT
-(HS256, 7 days) → redirect to `FRONTEND_URL/#token=...` (fragment — never
-query string, so the token stays out of access logs and Referer headers).
-Never log the token.
+Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` in `.env`.
 
 ---
 
