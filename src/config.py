@@ -1,6 +1,7 @@
 """Centralized configuration for RAG Research Assistant."""
 
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -57,6 +58,10 @@ class Config:
     # FastAPI base for browser links (Google OAuth entrypoint, PR-6 client).
     # 8001 — chromadb owns 8000 in docker-compose.
     API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")
+    # Demo login (PR-6): "on" | "off" | "" = auto (on exactly when no
+    # Google creds — local clones get demo access, deployments with real
+    # auth do not). Explicit env always wins.
+    ENABLE_DEMO_LOGIN = os.getenv("ENABLE_DEMO_LOGIN", "")
 
     # --- Retrieval Params ---
     CHUNK_SIZE = 256
@@ -127,3 +132,14 @@ def _hf_models_cached() -> bool:
 # Explicit user setting (e.g. HF_HUB_OFFLINE=0) always wins (setdefault).
 if _hf_models_cached():
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+# Demo flag resolution (PR-6): auto = demo on exactly when Google auth is absent.
+if Config.ENABLE_DEMO_LOGIN not in ("on", "off"):
+    Config.ENABLE_DEMO_LOGIN = "off" if Config.GOOGLE_CLIENT_ID else "on"
+
+# Local demo needs signable tokens without forcing every clone to invent a
+# secret: generate an in-memory one ONLY when no Google creds and no env
+# secret (dies with the process — tokens never survive restart, never logged).
+# Google creds without JWT_SECRET still crashes loudly (misconfiguration).
+if not Config.JWT_SECRET and not Config.GOOGLE_CLIENT_ID:
+    Config.JWT_SECRET = secrets.token_urlsafe(32)

@@ -298,3 +298,112 @@ def _protected_app() -> FastAPI:
         return {"user_id": user_id}
 
     return app
+
+
+# --- Demo login (PLAN PR-6) ---
+
+
+@pytest.fixture()
+def demo_api(tmp_path, monkeypatch):
+    """App with demo mode on: local JWT secret, fresh DB, no Google needed."""
+    monkeypatch.setattr(Config, "DATABASE_URL", f"sqlite:///{tmp_path / 'demo.db'}")
+    monkeypatch.setattr(
+        Config, "JWT_SECRET", "test-secret-0123456789abcdef0123456789abcdef"
+    )
+    monkeypatch.setattr(Config, "ENABLE_DEMO_LOGIN", "on")
+    # Chroma is out of scope for auth tests — keep the suite fast/hermetic.
+    monkeypatch.setattr("src.db.chroma_client.has_chunks", lambda tenant: False)
+    monkeypatch.setattr(
+        "src.db.chroma_client.reassign_tenant", lambda old, new: 0
+    )
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    yield create_app()
+    reset_engine()
+
+
+def test_demo_login_issues_valid_token(demo_api):
+    client = TestClient(demo_api)
+
+    response = client.post("/auth/demo")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["email"] == "demo@local"
+    assert body["user_id"] >= 1
+    assert decode_token(body["token"]) == body["user_id"]
+
+
+def test_demo_login_upserts_single_user(demo_api):
+    client = TestClient(demo_api)
+
+    first = client.post("/auth/demo").json()
+    second = client.post("/auth/demo").json()
+
+    assert first["user_id"] == second["user_id"]
+    with session_scope() as session:
+        demo_rows = session.query(User).filter_by(email="demo@local").all()
+        assert len(demo_rows) == 1
+
+
+def test_demo_token_roundtrips_require_user(demo_api):
+    token = client_post_demo_token(demo_api)
+    app = _protected_app()
+
+    response = TestClient(app).get(
+        "/whoami", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+
+
+def test_demo_route_absent_when_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, "DATABASE_URL", f"sqlite:///{tmp_path / 'off.db'}")
+    monkeypatch.setattr(Config, "ENABLE_DEMO_LOGIN", "off")
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    app = create_app()
+    reset_engine()
+
+    response = TestClient(app).post("/auth/demo")
+
+    assert response.status_code == 404
+
+
+def test_demo_adopts_legacy_default_tenant(tmp_path, monkeypatch):
+    """First demo sign-in moves the pre-API `default` corpus to the user."""
+    monkeypatch.setattr(Config, "DATABASE_URL", f"sqlite:///{tmp_path / 'mig.db'}")
+    monkeypatch.setattr(
+        Config, "JWT_SECRET", "test-secret-0123456789abcdef0123456789abcdef"
+    )
+    monkeypatch.setattr(Config, "ENABLE_DEMO_LOGIN", "on")
+    monkeypatch.setattr("src.db.chroma_client.has_chunks", lambda tenant: False)
+    moved: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "src.db.chroma_client.reassign_tenant", lambda old, new: moved.append((old, new)) or 5
+    )
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    client = TestClient(create_app())
+    reset_engine()
+
+    body = client.post("/auth/demo").json()
+
+    assert moved == [("default", str(body["user_id"]))]
+
+
+def test_demo_token_never_logged(demo_api):
+    """Security gate 3 extends to demo tokens."""
+    records: list[str] = []
+    sink_id = loguru_logger.add(lambda m: records.append(str(m)), level="DEBUG")
+    try:
+        token = client_post_demo_token(demo_api)
+    finally:
+        loguru_logger.remove(sink_id)
+
+    assert token not in "\n".join(records)
+
+
+def client_post_demo_token(app) -> str:
+    """POST /auth/demo on a fresh client, return the issued token."""
+    return TestClient(app).post("/auth/demo").json()["token"]

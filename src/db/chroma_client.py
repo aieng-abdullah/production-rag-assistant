@@ -154,6 +154,27 @@ def has_chunks(tenant_id: str = DEFAULT_TENANT) -> bool:
     return count_chunks(tenant_id) > 0
 
 
+def reassign_tenant(old_tenant: str, new_tenant: str) -> int:
+    """One-time move of legacy chunks to a new tenant key (PLAN PR-6).
+
+    Pre-API corpora live under the constant `default` tenant; demo sign-in
+    now derives the tenant from the user id. No-op when nothing matches.
+    """
+    collection = get_collection()
+    results = collection.get(
+        where=metadata_where(old_tenant), include=["metadatas"]
+    )
+    ids = results.get("ids") or []
+    if not ids:
+        return 0
+    metas = [{**meta, "tenant_id": new_tenant} for meta in results["metadatas"]]
+    collection.update(ids=ids, metadatas=metas)
+    logger.info(
+        f"Reassigned {len(ids)} chunks tenant={old_tenant} -> {new_tenant}"
+    )
+    return len(ids)
+
+
 def purge_tenant(tenant_id: str) -> int:
     """Delete every chunk for one tenant across all workspaces (PR-3b).
 
