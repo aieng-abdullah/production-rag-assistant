@@ -151,11 +151,16 @@ Branch: `feat/billing-flagged`
 
 ### PR-6 — Streamlit → API client
 Branch: `refactor/frontend-api-client`
-- [ ] Google sign-in button → JWT via URL **fragment** (`#token=`) → `st.session_state`
-- [ ] Sidebar/chat/upload via `httpx` + Bearer; status polling + spinner
-- [ ] Workspace switcher (Legal / Academic)
-- [ ] Remove ALL direct `src.*` imports from `app.py`
-- [ ] Logout clears session state; token never on disk
+- [x] Google sign-in button → JWT via URL **fragment** (`#token=`) → `st.session_state`
+- [x] Sidebar/chat/upload via `httpx` + Bearer; status polling + spinner
+- [x] Workspace switcher (Legal / Academic)
+- [x] Remove ALL direct `src.*` imports from `app.py`
+- [x] Logout clears session state; token never on disk
+- [x] Guest tier (ChatGPT-style): `POST /auth/anonymous` per-device session,
+      `ANON_QUERY_LIMIT=3` questions + `ANON_DOCUMENT_LIMIT=1` upload, then
+      the login wall; tier quotas enforced in `src/services/quotas.py`
+- [x] `POST /auth/demo` flag-gated (`ENABLE_DEMO_LOGIN`, auto-on without
+      Google creds) + legacy `default`-tenant adoption on first demo sign-in
 **Hope:** `grep "from src" app.py` = empty; UX feels same as before.
 
 ### PR-7 — Infra + business packaging
