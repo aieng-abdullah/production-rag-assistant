@@ -57,3 +57,20 @@ def test_downgrade_base_drops_all_tables(alembic_cfg):
     engine.dispose()
     # Alembic keeps its own bookkeeping table; all app tables must be gone.
     assert tables == {"alembic_version"}
+
+
+def test_upgrade_head_adds_stripe_columns(alembic_cfg):
+    """PLAN PR-5: subscriptions gains Stripe linkage + lifecycle columns."""
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(url)
+    columns = {c["name"] for c in inspect(engine).get_columns("subscriptions")}
+    engine.dispose()
+
+    assert {
+        "stripe_customer_id",
+        "stripe_subscription_id",
+        "status",
+        "current_period_end",
+    } <= columns

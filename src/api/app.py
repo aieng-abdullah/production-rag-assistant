@@ -14,6 +14,7 @@ from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
 from src.api.documents import recover_stale_documents, router as documents_router
 from src.api.usage import router as usage_router
+from src.config import Config
 
 __all__ = ["create_app"]
 
@@ -36,6 +37,14 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(answers_router)
     app.include_router(usage_router)
+    # PLAN PR-5: billing routes exist only when the Stripe flag is on —
+    # flag-off deployments must never expose /billing or /webhooks.
+    if Config.STRIPE_SECRET_KEY:
+        from src.api.billing import router as billing_router
+        from src.api.billing import webhook_router as stripe_webhook_router
+
+        app.include_router(billing_router)
+        app.include_router(stripe_webhook_router)
     return app
 
 

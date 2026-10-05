@@ -112,6 +112,13 @@ class Subscription(Base):
         ForeignKey("users.id", ondelete="CASCADE"), unique=True
     )
     tier: Mapped[str] = mapped_column(String(20), default="free")  # free | pro
+    # Stripe linkage (PLAN PR-5); nullable while the billing flag is off.
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="inactive")
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
