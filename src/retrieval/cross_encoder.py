@@ -1,15 +1,19 @@
+from threading import Lock
+
 from src.config import Config
 from sentence_transformers import CrossEncoder
 from loguru import logger
 
 _model = None
+_model_lock = Lock()
 
 def _get_model() -> CrossEncoder:
     global _model
     if _model is None:
-        _model = CrossEncoder(Config.RERANKER_MODEL,device="cpu") 
-    
-        logger.info(f"Loaded cross encoder model: {Config.RERANKER_MODEL}")
+        with _model_lock:
+            if _model is None:
+                _model = CrossEncoder(Config.RERANKER_MODEL, device="cpu")
+                logger.info(f"Loaded cross encoder model: {Config.RERANKER_MODEL}")
     return _model
 
 

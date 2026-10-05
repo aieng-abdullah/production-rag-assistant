@@ -103,3 +103,22 @@ class Config:
                 "Set at least one of GROQ_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in .env,\n"
                 "or add one via the sidebar in the app."
             )
+
+
+def _hf_models_cached() -> bool:
+    """Both RAG models already on disk (no download needed)?"""
+    hub = Path(
+        os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
+    ) / "hub"
+    repos = (Config.EMBEDDING_MODEL, Config.RERANKER_MODEL)
+    return all(
+        (hub / f"models--{repo.replace('/', '--')}").exists() for repo in repos
+    )
+
+
+# Must run before `huggingface_hub` imports (it reads this env at import time) —
+# every heavy module imports src.config first. Saves the ~5s hub roundtrip on
+# each model init. Only when both models are cached: first run still downloads.
+# Explicit user setting (e.g. HF_HUB_OFFLINE=0) always wins (setdefault).
+if _hf_models_cached():
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
