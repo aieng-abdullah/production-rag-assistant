@@ -329,6 +329,26 @@ Current implementation prioritizes retrieval quality and grounded answers over r
 
 ---
 
+## Roadmap (Phase 2+)
+
+This product is built for extensibility. The core engine (hybrid retrieval + citation verification + workspace profiles) is domain-agnostic. Next phases:
+
+| Domain | Status | Notes |
+|--------|--------|-------|
+| **Bangla support** | Planned | Multilingual embeddings (multilingual-e5) + Bangla OCR for scanned legal docs |
+| **Legal domain expansion** | Planned | Contract Act 1872, Companies Act 1994, case law corpus; section-aware retrieval |
+| **Medical domain** | Planned | Clinical guidelines, PubMed corpus, ICD-10 coding assistance; citation-verified medical Q&A |
+| **Reflective retrieval (T2)** | Designed | LangGraph orchestrator: query → retrieve → reflect → re-retrieve → answer |
+| **Workflow agents (T3)** | Designed | Domain-specific agents: contract review, literature review, compliance check |
+| **bKash payments** | Planned | Bangladesh-local payment rail alongside Stripe |
+| **Teams / orgs** | Planned | Shared workspaces, admin controls, SSO |
+| **SSE streaming** | Planned | Token-by-token answer streaming with citation markers |
+| **SPA frontend** | Planned | React/Vue SPA replacing Streamlit for production UX |
+
+The engine stays shared; only prompt profiles, chunk metadata schemas, and citation formats change per domain (Legal / Academic / **Medical** / Bangla).
+
+---
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE) — free to view, run, and study

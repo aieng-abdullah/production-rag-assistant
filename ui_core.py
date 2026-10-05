@@ -20,7 +20,7 @@ STYLES_PATH = Path(__file__).parent / "styles" / "main.css"
 _warmup_lock = Lock()
 _warmup_started = False
 
-# Spec §3: the only allowed session keys (session-local demo auth, PR-6.1).
+# Spec §3: the only allowed session keys (session-local auth, PR-6.1).
 _SESSION_DEFAULTS = {
     "jwt": None,
     "user_email": None,
@@ -30,8 +30,9 @@ _SESSION_DEFAULTS = {
     "doc_statuses": {},
     "quota": 0,
     "ingested_docs": [],
-    # Progressive auth wall: free anonymous queries, plan choice after login.
-    "anon_queries": 0,
+    # Guest tier: free try-out before the login wall.
+    "guest_queries": 0,
+    "guest_docs": 0,
     "user_tier": "free",
     "show_pricing_modal": False,
     # One-shot success banner (Documents page flash after ingest/delete).
@@ -72,11 +73,10 @@ def start_rag_warmup() -> None:
     def _warm() -> None:
         try:
             from src.retrieval.cross_encoder import _get_model as _reranker
-            from src.services import DEFAULT_TENANT, RAGService
-            from src.services.bm25_cache import get_bm25
+            from src.ingestion.embedder import _get_model as _embedder
 
-            RAGService()
-            get_bm25(DEFAULT_TENANT, Config.DEFAULT_WORKSPACE)
+            # Warm up embedder and reranker (BM25 needs tenant_id, skip here)
+            _embedder()
             _reranker()
             logger.info("RAG warm-up complete")
         except Exception as exc:

@@ -10,7 +10,9 @@ import streamlit as st
 from loguru import logger
 
 from menu import menu_with_redirect
-from src.services import DEFAULT_TENANT, RAGService
+from src.auth.dependencies import is_guest, get_current_tier
+from src.config import Config
+from src.services import RAGService, check_document_quota, record_ingest_usage, TIER_MULTIPLIERS
 from src.services.bm25_cache import invalidate
 from ui_core import (
     apply_workspace_accent,
@@ -32,6 +34,14 @@ apply_workspace_accent()
 menu_with_redirect()
 
 
+def _get_tenant_id() -> str:
+    """Get tenant_id from current session."""
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        return "default"
+    return str(user_id)
+
+
 def save_uploaded_file(uploaded_file) -> Path:
     """Save uploaded PDF to data/raw/."""
     file_path = DATA_DIR / uploaded_file.name
@@ -42,7 +52,26 @@ def save_uploaded_file(uploaded_file) -> Path:
 
 def process_pdf(file_path: Path) -> None:
     """Ingest PDF into the active workspace, refresh the BM25 cache."""
+    tenant_id = _get_tenant_id()
     workspace = st.session_state.workspace
+    tier = get_current_tier()
+
+    # Quota check
+    if is_guest():
+        if st.session_state.guest_docs >= 1:
+            st.error("Guest limit: 1 document. Sign in to upload more.")
+            return
+        st.session_state.guest_docs += 1
+    else:
+        quota = check_document_quota(int(tenant_id), tier)
+        if not quota.allowed:
+            st.error(
+                f"Document limit reached ({quota.used}/{quota.limit}). "
+                f"Upgrade to Pro for {TIER_MULTIPLIERS['pro']}x quota."
+            )
+            return
+        record_ingest_usage(int(tenant_id))
+
     _i_l, _i_anim, _i_r = st.columns([1, 2, 1])
     with _i_anim:
         lottie("indexing", height=140)
@@ -50,10 +79,10 @@ def process_pdf(file_path: Path) -> None:
         progress_bar = st.progress(0)
         try:
             result = rag_service.ingest(
-                DEFAULT_TENANT, file_path, workspace=workspace
+                tenant_id, file_path, workspace=workspace
             )
             progress_bar.progress(75)
-            invalidate(DEFAULT_TENANT)
+            invalidate(tenant_id)
             progress_bar.progress(100)
             # Chunks exist now; the raw PDF was only an ingest input (PR-3b).
             # Purge failure must not fail the page — chunks are already live.
@@ -73,7 +102,7 @@ def process_pdf(file_path: Path) -> None:
                 f"{file_path.name} indexed",
                 icon=":material/check_circle:",
             )
-            logger.info(f"PDF processed: {file_path.name} workspace={workspace}")
+            logger.info(f"PDF processed: {file_path.name} workspace={workspace} tenant={tenant_id}")
 
         except Exception as e:
             st.error(f"Error processing PDF: {e}")
@@ -84,6 +113,19 @@ def process_pdf(file_path: Path) -> None:
 
 def render_uploader() -> None:
     st.markdown("### Upload")
+
+    tier = get_current_tier()
+    tenant_id = _get_tenant_id()
+
+    # Show quota info
+    if is_guest():
+        st.caption("Guest limit: 1 document")
+    else:
+        quota = check_document_quota(int(tenant_id), tier)
+        st.caption(f"Documents: {quota.used}/{quota.limit} ({tier})")
+        if quota.remaining == 0:
+            st.warning("Document limit reached. Upgrade to Pro for more.")
+
     uploaded_file = st.file_uploader(
         "Drag and drop a PDF",
         type=["pdf"],
@@ -103,7 +145,8 @@ def render_uploader() -> None:
 def render_documents() -> None:
     """List persisted documents with status + delete."""
     st.markdown("### Documents")
-    doc_ids = rag_service.list_documents(DEFAULT_TENANT)
+    tenant_id = _get_tenant_id()
+    doc_ids = rag_service.list_documents(tenant_id)
 
     if not doc_ids:
         _e_left, _e_anim, _e_right = st.columns([1, 2, 1])
@@ -123,15 +166,15 @@ def render_documents() -> None:
             icon=":material/delete:",
         ):
             try:
-                rag_service.delete_document(DEFAULT_TENANT, doc_id)
+                rag_service.delete_document(tenant_id, doc_id)
                 # All workspace BM25 indexes must drop the deleted chunks.
-                invalidate(DEFAULT_TENANT)
+                invalidate(tenant_id)
                 st.toast(
                     f"{doc_id} deleted",
                     icon=":material/delete:",
                 )
                 st.session_state.success_flash = f"{doc_id} deleted."
-                logger.info(f"Document deleted via UI: {doc_id}")
+                logger.info(f"Document deleted via UI: {doc_id} tenant={tenant_id}")
                 st.rerun()
             except Exception as e:
                 st.error(f"Delete failed: {e}")

@@ -52,9 +52,8 @@ class Config:
     DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
     DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
-    # Progressive auth wall: guest tier gets ANON_QUERY_LIMIT queries
-    # before the demo sign-in prompt (ChatGPT-style free try-out).
-    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "3"))
+    # Guest tier: free try-out before the login wall.
+    GUEST_QUERY_LIMIT = int(os.getenv("GUEST_QUERY_LIMIT", "3"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
@@ -78,6 +77,19 @@ class Config:
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_PRO_PRICE = os.getenv("STRIPE_PRO_PRICE", "")
     APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
+
+    # Google OAuth (PLAN PR-2b)
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+    # JWT (PLAN PR-2b)
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+
+    # Auth mode
+    APP_AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
+
+    # Guest tier (replaces ANON_QUERY_LIMIT)
+    GUEST_QUERY_LIMIT = int(os.getenv("GUEST_QUERY_LIMIT", "3"))
 
     @classmethod
     def validate(cls):

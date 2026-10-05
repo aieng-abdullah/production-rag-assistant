@@ -10,10 +10,11 @@ import streamlit as st
 from loguru import logger
 
 from menu import menu_with_redirect, show_login_wall
+from src.auth.dependencies import is_guest, get_current_tier
 from src.config import Config
 from src.db.chroma_client import count_chunks, has_chunks
 from src.generation.providers import ProviderOverrides
-from src.services import DEFAULT_TENANT, RAGService
+from src.services import RAGService, check_query_quota, record_query_usage
 from src.services.bm25_cache import get_bm25
 from ui_core import (
     apply_workspace_accent,
@@ -66,25 +67,46 @@ def display_cited_answer(cited_answer) -> None:
                 )
 
 
+def _get_tenant_id() -> str:
+    """Get tenant_id from current session."""
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        return "default"
+    return str(user_id)
+
+
 def handle_query(query: str) -> None:
     """Handle user query and generate response."""
-    if not has_chunks():
+    tenant_id = _get_tenant_id()
+    workspace = st.session_state.workspace
+    tier = get_current_tier()
+
+    # Check if user has any chunks for this workspace
+    if not has_chunks(tenant_id, workspace):
         st.warning("Please upload a PDF in the Documents page first.")
         return
 
-    workspace = st.session_state.workspace
-    bm25 = get_bm25(DEFAULT_TENANT, workspace)
+    bm25 = get_bm25(tenant_id, workspace)
     if bm25 is None:
         st.warning(f"No documents indexed for the '{workspace}' workspace yet.")
         return
 
-    # Progressive auth wall: anonymous visitors get ANON_QUERY_LIMIT queries,
-    # then the login dialog. Signed-in sessions are metered by the API quota.
-    if not st.session_state.get("jwt"):
-        if st.session_state.anon_queries >= Config.ANON_QUERY_LIMIT:
+    # Quota check
+    if is_guest():
+        if st.session_state.guest_queries >= Config.GUEST_QUERY_LIMIT:
             show_login_wall()
             return
-        st.session_state.anon_queries += 1
+        st.session_state.guest_queries += 1
+    else:
+        # Authenticated user - check persisted quota
+        quota = check_query_quota(int(tenant_id), tier)
+        if not quota.allowed:
+            st.error(
+                f"Daily query limit reached ({quota.used}/{quota.limit}). "
+                f"Upgrade to Pro for {TIER_MULTIPLIERS['pro']}x quota."
+            )
+            return
+        record_query_usage(int(tenant_id))
 
     st.session_state.messages.append({"role": "user", "content": query})
 
@@ -95,7 +117,7 @@ def handle_query(query: str) -> None:
         st.caption("Thinking…")
         try:
             cited_answer = rag_service.generate_answer(
-                tenant_id=DEFAULT_TENANT,
+                tenant_id=tenant_id,
                 query=query,
                 bm25_index=bm25,
                 provider_overrides=_ui_provider_overrides(),
@@ -138,11 +160,18 @@ def render_sidebar() -> None:
     st.sidebar.markdown(brand_html(24), unsafe_allow_html=True)
     st.sidebar.divider()
 
-    if not st.session_state.get("jwt"):
-        left = max(
-            Config.ANON_QUERY_LIMIT - st.session_state.anon_queries, 0
-        )
-        st.sidebar.caption(f"Free queries left: {left}")
+    # Show quota remaining
+    tier = get_current_tier()
+    tenant_id = _get_tenant_id()
+
+    if is_guest():
+        left = max(Config.GUEST_QUERY_LIMIT - st.session_state.guest_queries, 0)
+        st.sidebar.caption(f"Guest queries left: {left}")
+    else:
+        quota = check_query_quota(int(tenant_id), tier)
+        st.sidebar.caption(f"Queries today: {quota.used}/{quota.limit} ({tier})")
+        if quota.remaining < 3:
+            st.sidebar.warning(f"Only {quota.remaining} queries left today")
 
     # Workspace switcher (spec §5 — accent + toast on change)
     def _on_workspace_change() -> None:
@@ -161,7 +190,7 @@ def render_sidebar() -> None:
     st.sidebar.divider()
 
     st.sidebar.markdown("### Documents")
-    doc_ids = rag_service.list_documents(DEFAULT_TENANT)
+    doc_ids = rag_service.list_documents(tenant_id)
     if doc_ids:
         for doc_id in doc_ids:
             st.sidebar.markdown(f"- `{doc_id}`")
@@ -178,10 +207,10 @@ def render_sidebar() -> None:
             icon=":material/upload_file:",
         )
 
-    if has_chunks():
+    if has_chunks(tenant_id):
         st.sidebar.divider()
         st.sidebar.markdown("### Stats")
-        st.sidebar.caption(f"Total chunks: {count_chunks()}")
+        st.sidebar.caption(f"Total chunks: {count_chunks(tenant_id)}")
 
     st.sidebar.divider()
     st.sidebar.markdown("### LLM Providers")

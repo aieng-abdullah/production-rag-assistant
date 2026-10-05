@@ -1,0 +1,106 @@
+{
+  "metrics": {
+    "citation_precision": 1.0,
+    "citation_recall": 0.8333,
+    "abstention_accuracy": 1.0
+  },
+  "gates": {
+    "citation_precision": {
+      "score": 1.0,
+      "threshold": 1.0,
+      "status": "PASS"
+    },
+    "citation_recall": {
+      "score": 0.8333,
+      "threshold": 0.75,
+      "status": "PASS"
+    },
+    "abstention_accuracy": {
+      "score": 1.0,
+      "threshold": 1.0,
+      "status": "PASS"
+    }
+  },
+  "items": [
+    {
+      "id": "legal-proviso-marriage",
+      "class": "proviso",
+      "expect": "cite",
+      "status": "verified",
+      "precision_valid": 2,
+      "precision_total": 2,
+      "recall_hit": true,
+      "abstention_correct": true
+    },
+    {
+      "id": "legal-proviso-discovery",
+      "class": "proviso",
+      "expect": "cite",
+      "status": "verified",
+      "precision_valid": 1,
+      "precision_total": 1,
+      "recall_hit": false,
+      "abstention_correct": true
+    },
+    {
+      "id": "legal-cross-ref-158",
+      "class": "missing-cross-ref",
+      "expect": "cite",
+      "status": "verified",
+      "precision_valid": 2,
+      "precision_total": 2,
+      "recall_hit": true,
+      "abstention_correct": true
+    },
+    {
+      "id": "legal-conflicting-102",
+      "class": "conflicting-sources",
+      "expect": "cite",
+      "status": "verified",
+      "precision_valid": 3,
+      "precision_total": 3,
+      "recall_hit": true,
+      "abstention_correct": true
+    },
+    {
+      "id": "legal-conflicting-101",
+      "class": "conflicting-sources",
+      "expect": "cite",
+      "status": "partial",
+      "precision_valid": 2,
+      "precision_total": 2,
+      "recall_hit": true,
+      "abstention_correct": true
+    },
+    {
+      "id": "legal-out-of-corpus",
+      "class": "out-of-corpus",
+      "expect": "abstain",
+      "status": "abstained",
+      "precision_valid": 0,
+      "precision_total": 0,
+      "recall_hit": false,
+      "abstention_correct": true
+    },
+    {
+      "id": "academic-attention-sublayer",
+      "class": "grounded-cite",
+      "expect": "cite",
+      "status": "verified",
+      "precision_valid": 1,
+      "precision_total": 1,
+      "recall_hit": true,
+      "abstention_correct": true
+    },
+    {
+      "id": "academic-out-of-corpus",
+      "class": "out-of-corpus",
+      "expect": "abstain",
+      "status": "abstained",
+      "precision_valid": 0,
+      "precision_total": 0,
+      "recall_hit": false,
+      "abstention_correct": true
+    }
+  ]
+}
