@@ -7,7 +7,7 @@
 streamlit run app.py
 
 # Lint (same as CI)
-ruff check src tests app.py eval alembic api_client.py
+ruff check src tests app.py eval alembic
 
 # Local test gate (CI runs the same tests WITHOUT the coverage gate)
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
@@ -24,13 +24,13 @@ python3 eval/eval_runner.py
 Single-app Streamlit project. No monorepo, no packages.
 
 ```
-app.py                        # Streamlit UI entrypoint
-api_client.py                 # httpx client pages use to reach the FastAPI backend (PR-6)
+app.py                        # Streamlit UI entrypoint (login gate)
 src/
   config.py                   # Centralized config, reads .env, validates at startup
   ingestion/                  # PDF → chunks → embeddings → ChromaDB
   retrieval/                  # BM25 + vector search → RRF fusion → cross-encoder rerank
   generation/                 # Citation prompt builder + Groq LLM call + Pydantic validation
+  services/                   # RAGService facade + BM25 cache (pages call this)
   db/                         # ChromaDB client (LangChain Chroma wrapper)
   monitoring/                 # Langfuse tracing (optional, fails silently if unconfigured)
 eval/                         # Ragas evaluation runner
@@ -52,7 +52,7 @@ tests/                        # Pytest suite
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
-1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic api_client.py`
+1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic`
 2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0`
 
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` are skipped).
@@ -77,7 +77,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
   merged work is `git revert` (commits always survive in `main` history;
   a deleted branch pointer loses nothing). Restore a deleted branch any
   time with `git branch <name> <sha>`.
-- Run `ruff check src tests app.py eval alembic api_client.py` + the fast test command green locally before push (keep coverage ≥70%).
+- Run `ruff check src tests app.py eval alembic` + the fast test command green locally before push (keep coverage ≥70%).
 
 ## Change Review Protocol (PR Contract)
 
@@ -149,5 +149,6 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
 - **Never make cosmetic changes to pass time.** No import reordering, no refactoring
   working code, no `try/except` → `contextlib.suppress` swaps unless the user asks.
   Every change must have a functional purpose.
-- Don't add new direct `src.*` imports to `app.py` — go through `RAGService`;
+- Pages call `src.services.RAGService` directly (single-process mode,
+  PLAN PR-6.1). `app.py` keeps no `src.*` imports;
   `src/` stays framework-free (no Streamlit imports below `app.py`).

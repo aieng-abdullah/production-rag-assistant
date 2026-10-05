@@ -1,7 +1,6 @@
 """Centralized configuration for RAG Research Assistant."""
 
 import os
-import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -43,26 +42,6 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
-    # --- Google OAuth + JWT (PLAN PR-2b, env-gated) ---
-    # Absent → /auth/* returns 501 and the app runs without sign-in.
-    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI = os.getenv(
-        "GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback"
-    )
-    # HS256 signing key — env-only, never logged, required once Google creds are set.
-    JWT_SECRET = os.getenv("JWT_SECRET", "")
-    JWT_TTL_DAYS = int(os.getenv("JWT_TTL_DAYS", "7"))
-    # Browser redirect target after OAuth callback (Streamlit UI).
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
-    # FastAPI base for browser links (Google OAuth entrypoint, PR-6 client).
-    # 8001 — chromadb owns 8000 in docker-compose.
-    API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")
-    # Demo login (PR-6): "on" | "off" | "" = auto (on exactly when no
-    # Google creds — local clones get demo access, deployments with real
-    # auth do not). Explicit env always wins.
-    ENABLE_DEMO_LOGIN = os.getenv("ENABLE_DEMO_LOGIN", "")
-
     # --- Retrieval Params ---
     CHUNK_SIZE = 256
     CHUNK_OVERLAP = 100
@@ -73,11 +52,9 @@ class Config:
     DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
     DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
-    # Progressive auth wall: guest tier gets ANON_QUERY_LIMIT queries and
-    # ANON_DOCUMENT_LIMIT uploads before the login prompt (ChatGPT-style
-    # free try-out, PLAN PR-6).
+    # Progressive auth wall: guest tier gets ANON_QUERY_LIMIT queries
+    # before the demo sign-in prompt (ChatGPT-style free try-out).
     ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "3"))
-    ANON_DOCUMENT_LIMIT = int(os.getenv("ANON_DOCUMENT_LIMIT", "1"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
@@ -135,14 +112,3 @@ def _hf_models_cached() -> bool:
 # Explicit user setting (e.g. HF_HUB_OFFLINE=0) always wins (setdefault).
 if _hf_models_cached():
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
-
-# Demo flag resolution (PR-6): auto = demo on exactly when Google auth is absent.
-if Config.ENABLE_DEMO_LOGIN not in ("on", "off"):
-    Config.ENABLE_DEMO_LOGIN = "off" if Config.GOOGLE_CLIENT_ID else "on"
-
-# Local demo needs signable tokens without forcing every clone to invent a
-# secret: generate an in-memory one ONLY when no Google creds and no env
-# secret (dies with the process — tokens never survive restart, never logged).
-# Google creds without JWT_SECRET still crashes loudly (misconfiguration).
-if not Config.JWT_SECRET and not Config.GOOGLE_CLIENT_ID:
-    Config.JWT_SECRET = secrets.token_urlsafe(32)

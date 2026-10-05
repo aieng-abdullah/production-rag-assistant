@@ -99,9 +99,7 @@ class TestQuotaConfig:
         assert isinstance(Config.STORAGE_LIMIT_MB, int)
         assert Config.STORAGE_LIMIT_MB > 0
 
-    def test_quotas_module_derives_from_config(self):
-        from src.services import quotas
-
-        assert quotas.DAILY_QUERY_LIMIT == Config.DAILY_QUERY_LIMIT
-        assert quotas.DOCUMENT_LIMIT == Config.DOCUMENT_LIMIT
-        assert quotas.STORAGE_LIMIT_BYTES == Config.STORAGE_LIMIT_MB * 1024 * 1024
+    def test_anon_query_limit_is_positive_int(self):
+        # Guest wall (menu.show_login_wall + chat sidebar) reads this.
+        assert isinstance(Config.ANON_QUERY_LIMIT, int)
+        assert Config.ANON_QUERY_LIMIT > 0
