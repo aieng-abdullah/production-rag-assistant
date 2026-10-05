@@ -7,7 +7,7 @@ No `src.*` imports here (AGENTS.md guardrail).
 import streamlit as st
 
 from menu import menu
-from ui_core import brand_html, init_session_state, load_css, page_config
+from ui_core import brand_html, init_session_state, load_css, lottie, page_config
 
 page_config("RAG Research Assistant")
 init_session_state()
@@ -27,6 +27,10 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+_h_left, _h_anim, _h_right = st.columns([1, 2, 1])
+with _h_anim:
+    lottie("hero", height=230)
 
 cta1, cta2, _ = st.columns([1, 1, 2])
 with cta1:

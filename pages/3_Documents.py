@@ -14,7 +14,13 @@ from loguru import logger
 import api_client
 from api_client import APIError
 from menu import menu_with_redirect, show_login_wall
-from ui_core import apply_workspace_accent, init_session_state, load_css, page_config
+from ui_core import (
+    apply_workspace_accent,
+    init_session_state,
+    load_css,
+    lottie,
+    page_config,
+)
 
 _POLL_INTERVAL_SECONDS = 2.0
 _POLL_DEADLINE_SECONDS = 300.0
@@ -77,9 +83,11 @@ def render_uploader() -> None:
                 return
 
             if status == "ready":
-                st.success(f"Processed {result['filename']}")
                 st.toast(f"{result['filename']} indexed", icon=":material/check_circle:")
                 logger.info(f"PDF processed: {result['filename']}")
+                st.session_state.success_flash = (
+                    f"{result['filename']} indexed and ready."
+                )
                 st.rerun()
             elif status == "failed":
                 st.error(f"Ingest failed for {result['filename']} — check the API logs.")
@@ -111,6 +119,9 @@ def render_documents() -> None:
         return
 
     if not docs:
+        _e_left, _e_anim, _e_right = st.columns([1, 2, 1])
+        with _e_anim:
+            lottie("empty", height=170)
         st.info("No documents yet. Upload a PDF above.")
         return
 
@@ -132,13 +143,26 @@ def render_documents() -> None:
                 api_client.delete_document(document_id)
                 st.toast(f"{filename} deleted", icon=":material/delete:")
                 logger.info(f"Document deleted via UI: {filename}")
+                st.session_state.success_flash = f"{filename} deleted."
                 st.rerun()
             except APIError as exc:
                 st.error(f"Delete failed: {exc.detail}")
                 logger.error(f"Delete failed doc={filename}: {exc.detail}")
 
 
+def _render_success_flash() -> None:
+    """One-shot banner: ingest ready / document deleted (consumes the flag)."""
+    message = st.session_state.pop("success_flash", None)
+    if not message:
+        return
+    _s_left, _s_anim, _s_right = st.columns([1, 2, 1])
+    with _s_anim:
+        lottie("success", height=130, loop=False)
+    st.success(message)
+
+
 def main() -> None:
+    _render_success_flash()
     render_uploader()
     st.divider()
     render_documents()
