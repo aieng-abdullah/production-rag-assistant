@@ -362,6 +362,8 @@ locally for personal, academic, or other noncommercial use. You may not
 sell the software or offer it as a paid commercial service. For
 commercial licensing, contact the author.
 
+Required Notice: Copyright (c) 2026 Abdullah
+
 ---
 
 ## Author
