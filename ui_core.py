@@ -4,6 +4,7 @@ PR-6: pages reach the backend through `api_client` (httpx + JWT); this
 module owns session/OAuth plumbing and chrome only.
 """
 
+import re
 from pathlib import Path
 
 import streamlit as st
@@ -31,6 +32,8 @@ _SESSION_DEFAULTS = {
     "anon_queries": 0,
     "user_tier": "free",
     "show_pricing_modal": False,
+    # One-shot success banner (Documents page flash after ready/deleted).
+    "success_flash": None,
 }
 
 # Spec §4.2: workspace accents override the base --ws-accent token.
@@ -149,4 +152,29 @@ def page_config(title: str) -> None:
         page_title=title,
         page_icon=":material/library_books:",
         layout="wide",
+    )
+
+
+def lottie(name: str, height: int = 180, *, loop: bool = True) -> None:
+    """Render a bundled Lottie animation (`static/lottie/<name>.json`).
+
+    Streamlit serves the sibling `static/` directory at `/app/static/...`,
+    and the lottie-player web component is vendored there too — the page
+    never calls a CDN at runtime. `name` must match `[a-z0-9_-]+` (it is
+    interpolated into HTML).
+    """
+    if not re.fullmatch(r"[a-z0-9_-]+", name):
+        raise ValueError(f"Invalid lottie animation name: {name!r}")
+    st.html(
+        f"""
+        <script src="/app/static/lottie-player.js"></script>
+        <lottie-player
+            src="/app/static/lottie/{name}.json"
+            background="transparent"
+            autoplay
+            loop="{str(loop).lower()}"
+            style="width:100%;height:{height}px;display:block;margin:0 auto;">
+        </lottie-player>
+        """,
+        unsafe_allow_javascript=True,
     )

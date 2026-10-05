@@ -18,6 +18,7 @@ from ui_core import (
     init_session_state,
     load_css,
     logo_mark,
+    lottie,
     page_config,
 )
 
@@ -51,6 +52,9 @@ st.markdown(
     f'<div class="brand-center">{logo_mark(56)}</div>',
     unsafe_allow_html=True,
 )
+_l_left, _l_anim, _l_right = st.columns([1, 2, 1])
+with _l_anim:
+    lottie("login", height=150)
 st.markdown(
     """
 <div class="hero hero-center">

@@ -18,6 +18,7 @@ from ui_core import (
     brand_html,
     init_session_state,
     load_css,
+    lottie,
     page_config,
 )
 
@@ -212,6 +213,12 @@ def _load_documents() -> list[dict] | None:
 def render_chat() -> None:
     """Render main chat area."""
     st.markdown("### Chat")
+
+    if not st.session_state.messages:
+        _e_left, _e_anim, _e_right = st.columns([1, 2, 1])
+        with _e_anim:
+            lottie("chat", height=170)
+        st.caption("Ask anything about your documents — every answer cites its page.")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
