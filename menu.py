@@ -9,7 +9,9 @@ import os
 
 import streamlit as st
 
-from ui_core import brand_html
+from pricing_modal import maybe_show_pricing_modal
+from src.config import Config
+from ui_core import brand_html, google_login_url
 
 AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
 
@@ -78,7 +80,42 @@ def menu() -> None:
 
 
 def menu_with_redirect() -> None:
-    """Render menu; bounce to Login when auth is on and jwt missing."""
+    """Render menu; bounce to Login when auth is on and jwt missing;
+    open the plan chooser once after each login."""
     if AUTH_ENABLED and not st.session_state.get("jwt"):
         st.switch_page(_LOGIN)
     menu()
+    maybe_show_pricing_modal()
+
+
+@st.dialog("Sign in to keep going")
+def show_login_wall() -> None:
+    """Anonymous quota exhausted: offer real login, demo as local fallback."""
+    limit = Config.ANON_QUERY_LIMIT
+    st.markdown(f"### You've used all {limit} free queries")
+    st.caption(
+        "Sign in to continue — your documents and history stay associated "
+        "with your account."
+    )
+
+    google_url = google_login_url()
+    if google_url:
+        st.link_button(
+            "Continue with Google",
+            google_url,
+            type="primary",
+            use_container_width=True,
+            key="wall_google",
+        )
+    st.caption("Local demo — no account, stays in this browser session.")
+    if st.button(
+        "Continue as demo",
+        type="secondary" if google_url else "primary",
+        use_container_width=True,
+        key="wall_demo",
+    ):
+        st.session_state.jwt = "demo-token"
+        st.session_state.user_email = "demo@local"
+        st.session_state.user_id = "demo"
+        st.session_state.show_pricing_modal = True
+        st.rerun()

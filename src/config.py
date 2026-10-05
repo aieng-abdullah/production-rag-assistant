@@ -47,13 +47,16 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI = os.getenv(
-        "GOOGLE_REDIRECT_URI", "http://localhost:8501/auth/google/callback"
+        "GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback"
     )
     # HS256 signing key — env-only, never logged, required once Google creds are set.
     JWT_SECRET = os.getenv("JWT_SECRET", "")
     JWT_TTL_DAYS = int(os.getenv("JWT_TTL_DAYS", "7"))
     # Browser redirect target after OAuth callback (Streamlit UI).
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
+    # FastAPI base for browser links (Google OAuth entrypoint, PR-6 client).
+    # 8001 — chromadb owns 8000 in docker-compose.
+    API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")
 
     # --- Retrieval Params ---
     CHUNK_SIZE = 256
@@ -65,6 +68,8 @@ class Config:
     DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
     DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
+    # Progressive auth wall: free anonymous queries before the login prompt.
+    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "5"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")

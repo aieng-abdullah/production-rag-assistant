@@ -2,19 +2,50 @@
 
 Streamlit Cloud + Docker both run `streamlit run app.py`.
 APP_AUTH=off (default): local demo session, no backend.
-APP_AUTH=on: Google→JWT arrives with PLAN PR-2b — button disabled with
-an inline notice until then (fail loud, never a fake token).
+APP_AUTH=on: Google→JWT via API /auth/google; a same-origin bridge moves
+the `#token=` fragment (security gate: never a query string in the
+redirect) into `?token=` once so the server can consume it.
 No `src.*` imports here (AGENTS.md guardrail).
 """
 
 import streamlit as st
 
 from menu import AUTH_ENABLED, menu
-from ui_core import init_session_state, load_css, logo_mark, page_config
+from ui_core import (
+    capture_oauth_token,
+    google_login_url,
+    init_session_state,
+    load_css,
+    logo_mark,
+    page_config,
+    start_rag_warmup,
+)
+
+# Fragment → query bridge: OAuth lands on /#token=..., Streamlit cannot read
+# fragments. Runs in the page document, so it reads our own location directly;
+# capture_oauth_token() deletes the param before any widget renders. Content
+# is a constant string (no user input). Fails silent — login stays off rather
+# than leaking a token anywhere unexpected (fail safe, not fail open).
+_OAUTH_BRIDGE_JS = """
+try {
+  const m = window.location.hash.match(/[#&]token=([^&]+)/);
+  if (m) {
+    const u = new URL(window.location.href);
+    u.searchParams.set("token", m[1]);
+    u.hash = "";
+    window.location.replace(u.toString());
+  }
+} catch (e) {}
+"""
 
 page_config("Sign in — RAG Research Assistant")
 init_session_state()
 load_css()
+start_rag_warmup()  # torch/models load in background while user reads login
+st.html(_OAUTH_BRIDGE_JS, unsafe_allow_javascript=True)
+if capture_oauth_token():
+    st.switch_page("pages/2_Chat.py")
+
 menu()
 
 st.markdown(
@@ -36,7 +67,16 @@ login_box, _ = st.columns([2, 1])
 with login_box:
     with st.container(border=True):
         st.subheader("Sign in")
-        if AUTH_ENABLED:
+        google_url = google_login_url()
+        if google_url:
+            st.link_button(
+                "Continue with Google",
+                google_url,
+                type="primary",
+                use_container_width=True,
+                key="google_signin",
+            )
+        elif AUTH_ENABLED:
             st.button(
                 "Continue with Google",
                 type="primary",
@@ -45,21 +85,23 @@ with login_box:
                 key="google_signin",
             )
             st.error(
-                "Google sign-in connects with PLAN PR-2b (auth service). "
+                "Google sign-in needs GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET "
+                "in .env (see README 'Google OAuth setup'). "
                 "Set APP_AUTH=off for local demo access.",
                 icon=":material/info:",
             )
-        else:
+        if not AUTH_ENABLED:
             st.caption("Demo mode — no account needed. Your session stays local.")
             if st.button(
                 "Continue as demo",
-                type="primary",
+                type="secondary" if google_url else "primary",
                 use_container_width=True,
                 key="demo_continue",
             ):
                 st.session_state.jwt = "demo-token"
                 st.session_state.user_email = "demo@local"
                 st.session_state.user_id = "demo"
+                st.session_state.show_pricing_modal = True
                 st.switch_page("pages/2_Chat.py")
 
         st.divider()

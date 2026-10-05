@@ -9,7 +9,7 @@ from pathlib import Path
 import streamlit as st
 from loguru import logger
 
-from menu import menu_with_redirect
+from menu import menu_with_redirect, show_login_wall
 from src.config import Config
 from src.db.chroma_client import count_chunks, has_chunks
 from src.generation.providers import ProviderOverrides
@@ -77,6 +77,14 @@ def handle_query(query: str) -> None:
         st.warning(f"No documents indexed for the '{workspace}' workspace yet.")
         return
 
+    # Progressive auth wall: anonymous visitors get ANON_QUERY_LIMIT queries,
+    # then the login dialog. Signed-in sessions are metered by the API quota.
+    if not st.session_state.get("jwt"):
+        if st.session_state.anon_queries >= Config.ANON_QUERY_LIMIT:
+            show_login_wall()
+            return
+        st.session_state.anon_queries += 1
+
     st.session_state.messages.append({"role": "user", "content": query})
 
     with st.chat_message("assistant"):
@@ -125,6 +133,12 @@ def render_sidebar() -> None:
     """Sidebar: brand, workspace switcher, documents, stats, provider keys."""
     st.sidebar.markdown(brand_html(24), unsafe_allow_html=True)
     st.sidebar.divider()
+
+    if not st.session_state.get("jwt"):
+        left = max(
+            Config.ANON_QUERY_LIMIT - st.session_state.anon_queries, 0
+        )
+        st.sidebar.caption(f"Free queries left: {left}")
 
     # Workspace switcher (spec §5 — accent + toast on change)
     def _on_workspace_change() -> None:
