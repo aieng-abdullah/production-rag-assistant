@@ -1,22 +1,23 @@
 """Documents page — upload, status, delete (docs/UI_DESIGN.md §5 — 3_Documents).
 
-Interim: direct service calls; httpx + JWT in PLAN PR-6.
+PR-6: multipart upload → `POST /documents` (202), status polled through
+`GET /documents/{id}` until the background ingest flips to ready/failed,
+delete via `DELETE /documents/{id}`. Guests provision their per-device
+session on first upload — the tier allows one free document.
 """
 
-from pathlib import Path
+import time
 
 import streamlit as st
 from loguru import logger
 
-from menu import menu_with_redirect
-from src.services import DEFAULT_TENANT, RAGService
-from src.services.bm25_cache import invalidate
+import api_client
+from api_client import APIError
+from menu import menu_with_redirect, show_login_wall
 from ui_core import apply_workspace_accent, init_session_state, load_css, page_config
 
-DATA_DIR = Path("data/raw")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-rag_service = RAGService()
+_POLL_INTERVAL_SECONDS = 2.0
+_POLL_DEADLINE_SECONDS = 300.0
 
 page_config("Documents — RAG Research Assistant")
 init_session_state()
@@ -25,51 +26,27 @@ apply_workspace_accent()
 menu_with_redirect()
 
 
-def save_uploaded_file(uploaded_file) -> Path:
-    """Save uploaded PDF to data/raw/."""
-    file_path = DATA_DIR / uploaded_file.name
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return file_path
-
-
-def process_pdf(file_path: Path) -> None:
-    """Ingest PDF into the active workspace, refresh the BM25 cache."""
+def _upload(uploaded_file) -> dict:
+    """Send the PDF bytes to the API; provisions the guest session first."""
+    if not st.session_state.get("jwt"):
+        api_client.ensure_guest_session()
     workspace = st.session_state.workspace
-    with st.spinner(f"Processing {file_path.name} into '{workspace}'..."):
-        progress_bar = st.progress(0)
-        try:
-            result = rag_service.ingest(
-                DEFAULT_TENANT, file_path, workspace=workspace
-            )
-            progress_bar.progress(75)
-            invalidate(DEFAULT_TENANT)
-            progress_bar.progress(100)
-            # Chunks exist now; the raw PDF was only an ingest input (PR-3b).
-            # Purge failure must not fail the page — chunks are already live.
-            try:
-                file_path.unlink(missing_ok=True)
-            except OSError as exc:
-                logger.warning(f"Raw purge failed {file_path}: {exc}")
+    payload = uploaded_file.getvalue()
+    return api_client.upload_document(payload, uploaded_file.name, workspace)
 
-            if file_path.name not in st.session_state.ingested_docs:
-                st.session_state.ingested_docs.append(file_path.name)
 
-            st.success(
-                f"Processed {result['pages']} pages, "
-                f"{result['chunks']} chunks into '{workspace}'"
-            )
-            st.toast(
-                f"{file_path.name} indexed",
-                icon=":material/check_circle:",
-            )
-            logger.info(f"PDF processed: {file_path.name} workspace={workspace}")
-
-        except Exception as e:
-            st.error(f"Error processing PDF: {e}")
-            st.toast("Ingest failed", icon=":material/error:")
-            logger.error(f"PDF processing failed: {e}")
-            raise
+def _await_ingest(document_id: int, filename: str) -> str:
+    """Poll the API until the background ingest finishes; returns status."""
+    deadline = time.monotonic() + _POLL_DEADLINE_SECONDS
+    status = "processing"
+    while time.monotonic() < deadline:
+        doc = api_client.get_document(document_id)
+        status = doc.get("status", "processing")
+        if status in ("ready", "failed"):
+            return status
+        time.sleep(_POLL_INTERVAL_SECONDS)
+    logger.warning(f"Ingest poll timed out doc={filename} id={document_id}")
+    return status
 
 
 def render_uploader() -> None:
@@ -83,45 +60,82 @@ def render_uploader() -> None:
     if uploaded_file is not None:
         if st.button("Process Document", type="primary"):
             try:
-                file_path = save_uploaded_file(uploaded_file)
-                process_pdf(file_path)
+                with st.spinner(f"Uploading {uploaded_file.name}..."):
+                    result = _upload(uploaded_file)
+                with st.spinner(
+                    f"Processing {result['filename']} into "
+                    f"'{st.session_state.workspace}'..."
+                ):
+                    status = _await_ingest(result["id"], result["filename"])
+            except APIError as exc:
+                logger.error(f"Upload failed: status={exc.status} {exc.detail}")
+                if exc.status == 429 and st.session_state.get("anon_tier"):
+                    st.error(exc.detail)
+                    show_login_wall()
+                else:
+                    st.error(f"Upload failed: {exc.detail}")
+                return
+
+            if status == "ready":
+                st.success(f"Processed {result['filename']}")
+                st.toast(f"{result['filename']} indexed", icon=":material/check_circle:")
+                logger.info(f"PDF processed: {result['filename']}")
                 st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Failed: {e}")
+            elif status == "failed":
+                st.error(f"Ingest failed for {result['filename']} — check the API logs.")
+                st.toast("Ingest failed", icon=":material/error:")
+            else:
+                st.warning(
+                    "Still processing — refresh in a moment to see the status."
+                )
+
+
+_STATUS_ICONS = {
+    "ready": (":material/check_circle:", "indexed"),
+    "processing": (":material/hourglass_top:", "processing"),
+    "failed": (":material/error:", "failed"),
+}
 
 
 def render_documents() -> None:
-    """List persisted documents with status + delete."""
+    """List documents with status + delete (API-backed)."""
     st.markdown("### Documents")
-    doc_ids = rag_service.list_documents(DEFAULT_TENANT)
+    try:
+        docs = api_client.list_documents()
+    except APIError as exc:
+        if exc.status == 401:
+            st.info("Sign in to see your documents.")
+        else:
+            logger.warning(f"Document list unavailable: {exc.detail}")
+            st.warning(f"Document list unavailable: {exc.detail}")
+        return
 
-    if not doc_ids:
+    if not docs:
         st.info("No documents yet. Upload a PDF above.")
         return
 
-    for doc_id in doc_ids:
+    for doc in docs:
+        document_id = doc["id"]
+        filename = doc["filename"]
+        status = doc.get("status", "ready")
+        icon, label = _STATUS_ICONS.get(status, (":material/help:", status))
         row = st.container(border=True)
         c1, c2, c3 = row.columns([4, 2, 1])
-        c1.markdown(f"`{doc_id}`")
-        c2.markdown(":material/check_circle: indexed")
+        c1.markdown(f"`{filename}`")
+        c2.markdown(f"{icon} {label}")
         if c3.button(
             "Delete",
-            key=f"del_{doc_id}",
+            key=f"del_{document_id}",
             icon=":material/delete:",
         ):
             try:
-                rag_service.delete_document(DEFAULT_TENANT, doc_id)
-                # All workspace BM25 indexes must drop the deleted chunks.
-                invalidate(DEFAULT_TENANT)
-                st.toast(
-                    f"{doc_id} deleted",
-                    icon=":material/delete:",
-                )
-                logger.info(f"Document deleted via UI: {doc_id}")
+                api_client.delete_document(document_id)
+                st.toast(f"{filename} deleted", icon=":material/delete:")
+                logger.info(f"Document deleted via UI: {filename}")
                 st.rerun()
-            except Exception as e:
-                st.error(f"Delete failed: {e}")
-                logger.error(f"Delete failed doc={doc_id}: {e}")
+            except APIError as exc:
+                st.error(f"Delete failed: {exc.detail}")
+                logger.error(f"Delete failed doc={filename}: {exc.detail}")
 
 
 def main() -> None:
