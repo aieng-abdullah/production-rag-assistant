@@ -70,7 +70,12 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
   Pre-push secret scan must be empty:
   `git log -p | grep -iE "sk-[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{10,}|ghp_[a-zA-Z0-9]{20,}|gsk_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}"`
 - Resolve conflicts inside the feature branch. No `merge:` conflict-fix commits on main.
-- Squash-merge PRs, then delete the head branch. Clean up stale branches after merge.
+- Branch policy (hybrid): delete merged feature/fix/chore/docs branches
+  after squash-merge; KEEP long-lived branches (`main`, `develop`,
+  `release/*`, `gh-pages`) and any unmerged branch. Rollback path for
+  merged work is `git revert` (commits always survive in `main` history;
+  a deleted branch pointer loses nothing). Restore a deleted branch any
+  time with `git branch <name> <sha>`.
 - Run `ruff check src tests app.py eval alembic` + the fast test command green locally before push (keep coverage ≥70%).
 
 ## Change Review Protocol (PR Contract)
