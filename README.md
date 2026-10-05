@@ -351,6 +351,15 @@ Current implementation prioritizes retrieval quality and grounded answers over r
 
 ---
 
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — free to view, run, and study
+locally for personal, academic, or other noncommercial use. You may not
+sell the software or offer it as a paid commercial service. For
+commercial licensing, contact the author.
+
+---
+
 ## Author
 
 ### Abdullah Al Arif
