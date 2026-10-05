@@ -20,3 +20,9 @@ toolbarMode = "viewer"
 # Does NOT hide the sidebar expand control, so navigation stays usable.
 [ui]
 hideTopBar = true
+
+# Serve the app's static/ directory at /app/static/... (Lottie animations
+# and the vendored lottie-player). Off by default — without this every
+# lottie URL falls through to index.html and the player never loads.
+[server]
+enableStaticServing = true
