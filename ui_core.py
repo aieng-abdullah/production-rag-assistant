@@ -152,19 +152,33 @@ def lottie(name: str, height: int = 180, *, loop: bool = True) -> None:
     and the lottie-player web component is vendored there too — the page
     never calls a CDN at runtime. `name` must match `[a-z0-9_-]+` (it is
     interpolated into HTML).
+
+    The `<lottie-player>` element is created from inside a `<script>`:
+    Streamlit sanitizes `st.html` bodies with DOMPurify, which drops the
+    unknown custom tag but keeps `<script>` (and re-executes it).
     """
     if not re.fullmatch(r"[a-z0-9_-]+", name):
         raise ValueError(f"Invalid lottie animation name: {name!r}")
+    loop_js = "true" if loop else "false"
     st.html(
         f"""
         <script src="/app/static/lottie-player.js"></script>
-        <lottie-player
-            src="/app/static/lottie/{name}.json"
-            background="transparent"
-            autoplay
-            loop="{str(loop).lower()}"
-            style="width:100%;height:{height}px;display:block;margin:0 auto;">
-        </lottie-player>
+        <div class="lottie-host" style="width:100%;height:{height}px;"></div>
+        <script>
+          (() => {{
+            const host = document.currentScript.previousElementSibling;
+            if (!host || host.dataset.lottieReady) return;
+            host.dataset.lottieReady = "1";
+            const player = document.createElement("lottie-player");
+            player.setAttribute("src", "/app/static/lottie/{name}.json");
+            player.setAttribute("background", "transparent");
+            player.setAttribute("autoplay", "");
+            player.setAttribute("loop", "{loop_js}");
+            player.style.cssText =
+              "width:100%;height:{height}px;display:block;margin:0 auto;";
+            host.appendChild(player);
+          }})();
+        </script>
         """,
         unsafe_allow_javascript=True,
     )
