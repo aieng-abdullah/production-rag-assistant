@@ -82,6 +82,13 @@ class Config:
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
     LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
+    # Stripe billing (PLAN PR-5) — routes register only when the secret key
+    # is present; webhook additionally needs its signing secret.
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_PRO_PRICE = os.getenv("STRIPE_PRO_PRICE", "")
+    APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
+
     @classmethod
     def validate(cls):
         """
