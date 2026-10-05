@@ -14,6 +14,7 @@ from authlib.integrations.httpx_client import OAuth2Client
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from src.api.security import create_token
@@ -191,3 +192,38 @@ def demo_login() -> dict:
     token = create_token(user_id)
     logger.info("Demo sign-in user_id={user_id}", user_id=user_id)
     return {"token": token, "user_id": user_id, "email": "demo@local"}
+
+
+class AnonymousLogin(BaseModel):
+    """Guest device id — uuid4 hex from the browser, used as the account key."""
+
+    device_id: str = Field(pattern=r"^[a-z0-9-]{8,64}$")
+
+
+@router.post("/anonymous")
+def anonymous_login(body: AnonymousLogin) -> dict:
+    """Guest session (PLAN PR-6): upsert a per-device account, issue JWT.
+
+    Guests get their own tenant (uploads stay theirs) plus the smaller
+    guest quotas enforced by `src.services.quotas` tier limits. One row
+    per device id — no verification, no email, expires nothing; replace
+    with real sign-in at any time via the login wall.
+    """
+    if not Config.JWT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT_SECRET is not set",
+        )
+
+    email = f"anon-{body.device_id}@local"
+    with session_scope() as session:
+        user = session.query(User).filter(User.email == email).first()
+        if user is None:
+            user = User(email=email, name="Guest")
+            session.add(user)
+        session.flush()
+        user_id = int(user.id)
+
+    token = create_token(user_id)
+    logger.info("Anonymous sign-in user_id={user_id}", user_id=user_id)
+    return {"token": token, "user_id": user_id, "email": "Guest", "tier": "anonymous"}

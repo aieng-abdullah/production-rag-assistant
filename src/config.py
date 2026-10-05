@@ -73,8 +73,11 @@ class Config:
     DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
     DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
-    # Progressive auth wall: free anonymous queries before the login prompt.
-    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "5"))
+    # Progressive auth wall: guest tier gets ANON_QUERY_LIMIT queries and
+    # ANON_DOCUMENT_LIMIT uploads before the login prompt (ChatGPT-style
+    # free try-out, PLAN PR-6).
+    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "3"))
+    ANON_DOCUMENT_LIMIT = int(os.getenv("ANON_DOCUMENT_LIMIT", "1"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
