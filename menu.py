@@ -1,18 +1,17 @@
 """Sidebar navigation — pattern adapted from antoineross/streamlit-saas-starter.
 
-Demo mode (default): APP_AUTH=off — Google→JWT arrives with PLAN PR-2b;
-until then every visitor is a local demo user. APP_AUTH=on enforces the
-redirect guard so PR-2b can flip one env var.
+Single-process demo (PLAN PR-6.1): every visitor is a local demo user
+(session state). APP_AUTH=on turns app.py into a login gate before the
+content pages — still session-local, no backend involved.
 """
 
 import os
 
 import streamlit as st
 
-from api_client import APIError, complete_demo_login
 from pricing_modal import maybe_show_pricing_modal
 from src.config import Config
-from ui_core import brand_html, google_login_url
+from ui_core import brand_html
 
 AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
 
@@ -91,7 +90,7 @@ def menu_with_redirect() -> None:
 
 @st.dialog("Sign in to keep going")
 def show_login_wall() -> None:
-    """Anonymous quota exhausted: offer real login, demo as local fallback."""
+    """Anonymous quota exhausted: offer the local demo session to continue."""
     limit = Config.ANON_QUERY_LIMIT
     st.markdown(f"### You've used all {limit} free queries")
     st.caption(
@@ -99,25 +98,15 @@ def show_login_wall() -> None:
         "with your account."
     )
 
-    google_url = google_login_url()
-    if google_url:
-        st.link_button(
-            "Continue with Google",
-            google_url,
-            type="primary",
-            use_container_width=True,
-            key="wall_google",
-        )
     st.caption("Local demo — no account, stays in this browser session.")
     if st.button(
         "Continue as demo",
-        type="secondary" if google_url else "primary",
+        type="primary",
         use_container_width=True,
         key="wall_demo",
     ):
-        try:
-            complete_demo_login()
-        except APIError as exc:
-            st.error(exc.detail)
-        else:
-            st.rerun()
+        st.session_state.jwt = "demo-token"
+        st.session_state.user_email = "demo@local"
+        st.session_state.user_id = "demo"
+        st.session_state.show_pricing_modal = True
+        st.rerun()
