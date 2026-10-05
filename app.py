@@ -28,6 +28,7 @@ from ui_core import (
 # is a constant string (no user input). Fails silent — login stays off rather
 # than leaking a token anywhere unexpected (fail safe, not fail open).
 _OAUTH_BRIDGE_JS = """
+<script>
 try {
   const m = window.location.hash.match(/[#&]token=([^&]+)/);
   if (m) {
@@ -37,6 +38,7 @@ try {
     window.location.replace(u.toString());
   }
 } catch (e) {}
+</script>
 """
 
 page_config("Sign in — RAG Research Assistant")
