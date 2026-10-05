@@ -89,45 +89,48 @@ def handle_query(query: str) -> None:
     st.session_state.messages.append({"role": "user", "content": query})
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            try:
-                cited_answer = rag_service.generate_answer(
-                    tenant_id=DEFAULT_TENANT,
-                    query=query,
-                    bm25_index=bm25,
-                    provider_overrides=_ui_provider_overrides(),
-                    workspace=workspace,
-                )
+        _t_l, _t_anim, _t_r = st.columns([1, 2, 1])
+        with _t_anim:
+            lottie("thinking", height=150)
+        st.caption("Thinking…")
+        try:
+            cited_answer = rag_service.generate_answer(
+                tenant_id=DEFAULT_TENANT,
+                query=query,
+                bm25_index=bm25,
+                provider_overrides=_ui_provider_overrides(),
+                workspace=workspace,
+            )
 
-                display_cited_answer(cited_answer)
+            display_cited_answer(cited_answer)
 
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": cited_answer.answer,
-                        "sources": [
-                            {
-                                "doc_id": s.doc_id,
-                                "page_num": s.page_num,
-                                "text": s.text,
-                            }
-                            for s in cited_answer.sources
-                        ],
-                    }
-                )
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": cited_answer.answer,
+                    "sources": [
+                        {
+                            "doc_id": s.doc_id,
+                            "page_num": s.page_num,
+                            "text": s.text,
+                        }
+                        for s in cited_answer.sources
+                    ],
+                }
+            )
 
-            except Exception as e:
-                st.error(f"Error generating answer: {e}")
-                logger.error(f"Generation failed: {e}")
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "I encountered an error while generating the "
-                            "answer. Please try again."
-                        ),
-                    }
-                )
+        except Exception as e:
+            st.error(f"Error generating answer: {e}")
+            logger.error(f"Generation failed: {e}")
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": (
+                        "I encountered an error while generating the "
+                        "answer. Please try again."
+                    ),
+                }
+            )
 
 
 def render_sidebar() -> None:

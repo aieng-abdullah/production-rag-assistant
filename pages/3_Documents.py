@@ -43,6 +43,9 @@ def save_uploaded_file(uploaded_file) -> Path:
 def process_pdf(file_path: Path) -> None:
     """Ingest PDF into the active workspace, refresh the BM25 cache."""
     workspace = st.session_state.workspace
+    _i_l, _i_anim, _i_r = st.columns([1, 2, 1])
+    with _i_anim:
+        lottie("indexing", height=140)
     with st.spinner(f"Processing {file_path.name} into '{workspace}'..."):
         progress_bar = st.progress(0)
         try:
