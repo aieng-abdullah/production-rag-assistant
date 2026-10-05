@@ -1,6 +1,6 @@
 """Sidebar navigation — pattern adapted from antoineross/streamlit-saas-starter.
 
-Single-process demo (PLAN PR-6.1): every visitor is a local demo user
+Single-process app (PLAN PR-6.1): every visitor is a local user
 (session state). APP_AUTH=on turns app.py into a login gate before the
 content pages — still session-local, no backend involved.
 """
@@ -10,10 +10,12 @@ import os
 import streamlit as st
 
 from pricing_modal import maybe_show_pricing_modal
+from src.auth.dependencies import require_user, is_guest
+from src.auth.google_oauth import create_guest_session
 from src.config import Config
 from ui_core import brand_html
 
-AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
+AUTH_ENABLED = Config.APP_AUTH_ENABLED
 
 _LOGIN = "app.py"
 _LANDING = "pages/1_Landing.py"
@@ -22,12 +24,29 @@ _DOCUMENTS = "pages/3_Documents.py"
 _DASHBOARD = "pages/4_Dashboard.py"
 _SETTINGS = "pages/5_Settings.py"
 _BILLING = "pages/6_Billing.py"
+_ADMIN = "pages/7_Admin.py"
+
+ADMIN_EMAILS = ["admin@example.com"]  # Must match pages/7_Admin.py
+
+
+def _is_admin() -> bool:
+    email = st.session_state.get("user_email", "")
+    return email in ADMIN_EMAILS
 
 
 def unauthenticated_menu() -> None:
-    """Navigation for visitors without a session (spec §2)."""
+    """Navigation for visitors without a session."""
     st.sidebar.page_link(_LANDING, label="Landing", icon=":material/home:")
-    st.sidebar.page_link(_LOGIN, label="Login", icon=":material/login:")
+    st.sidebar.page_link(_LOGIN, label="Sign in", icon=":material/login:")
+    st.sidebar.divider()
+    if st.sidebar.button(
+        "Continue as guest",
+        type="secondary",
+        use_container_width=True,
+        key="sidebar_guest",
+    ):
+        create_guest_session()
+        st.rerun()
 
 
 def authenticated_menu() -> None:
@@ -41,15 +60,25 @@ def authenticated_menu() -> None:
     )
     st.sidebar.page_link(_BILLING, label="Billing", icon=":material/credit_card:")
     st.sidebar.page_link(_SETTINGS, label="Settings", icon=":material/settings:")
+
+    # Admin link (only for admin users)
+    if _is_admin():
+        st.sidebar.page_link(_ADMIN, label="Admin", icon=":material/admin_panel_settings:")
+
     st.sidebar.divider()
-    email = st.session_state.get("user_email") or "demo user"
+
+    # User info
+    email = st.session_state.get("user_email") or "guest"
+    tier = st.session_state.get("user_tier", "free")
     avatar, name = st.sidebar.columns([1, 4])
     avatar.markdown(
         '<div class="avatar">'
-        f"{(email[:1] or 'D').upper()}</div>",
+        f"{(email[:1] or 'G').upper()}</div>",
         unsafe_allow_html=True,
     )
-    name.markdown(f"<small>{email}</small>", unsafe_allow_html=True)
+    tier_badge = "🟢 Pro" if tier == "pro" else "⚪ Free"
+    name.markdown(f"<small>{email} · {tier_badge}</small>", unsafe_allow_html=True)
+
     if st.sidebar.button(
         "Log out",
         key="logout_btn",
@@ -60,7 +89,7 @@ def authenticated_menu() -> None:
 
 
 def logout() -> None:
-    """Clear every session key and return to Login (spec §3 — token never persisted)."""
+    """Clear every session key and return to Login (token never persisted)."""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.switch_page(_LOGIN)
@@ -69,44 +98,56 @@ def logout() -> None:
 def menu() -> None:
     """Render the sidebar menu for the current auth state."""
     st.sidebar.markdown(brand_html(26), unsafe_allow_html=True)
-    if AUTH_ENABLED and not st.session_state.get("jwt"):
-        unauthenticated_menu()
-        return
+
+    # Guest users get authenticated menu but with guest limits
     if st.session_state.get("jwt"):
         authenticated_menu()
         return
-    # APP_AUTH=off and not yet signed in (Login page): public links only.
+
+    # No session - show unauthenticated menu
     unauthenticated_menu()
 
 
 def menu_with_redirect() -> None:
-    """Render menu; bounce to Login when auth is on and jwt missing;
-    open the plan chooser once after each login."""
+    """Render menu; bounce to Login when auth is on and no session."""
     if AUTH_ENABLED and not st.session_state.get("jwt"):
         st.switch_page(_LOGIN)
     menu()
     maybe_show_pricing_modal()
 
 
-@st.dialog("Sign in to keep going")
+@st.dialog("Sign in to continue")
 def show_login_wall() -> None:
-    """Anonymous quota exhausted: offer the local demo session to continue."""
-    limit = Config.ANON_QUERY_LIMIT
+    """Guest quota exhausted: offer sign in or reset guest session."""
+    limit = Config.GUEST_QUERY_LIMIT
     st.markdown(f"### You've used all {limit} free queries")
     st.caption(
-        "Sign in to continue — your documents and history stay associated "
-        "with your account."
+        "Sign in with Google to continue — your documents and history "
+        "stay associated with your account."
     )
 
-    st.caption("Local demo — no account, stays in this browser session.")
-    if st.button(
-        "Continue as demo",
+    st.divider()
+
+    # Option 1: Sign in with Google
+    from src.auth.google_oauth import get_google_auth_url
+
+    google_url = get_google_auth_url()
+    st.link_button(
+        "Sign in with Google",
+        google_url,
         type="primary",
         use_container_width=True,
-        key="wall_demo",
+        icon=":material/login:",
+    )
+
+    st.caption("Or reset your guest session:")
+
+    # Option 2: Reset guest session
+    if st.button(
+        "Continue as guest (reset limits)",
+        type="secondary",
+        use_container_width=True,
+        key="wall_guest_reset",
     ):
-        st.session_state.jwt = "demo-token"
-        st.session_state.user_email = "demo@local"
-        st.session_state.user_id = "demo"
-        st.session_state.show_pricing_modal = True
+        create_guest_session()
         st.rerun()

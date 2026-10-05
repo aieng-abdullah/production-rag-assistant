@@ -2,8 +2,8 @@
 
 Streamlit Cloud + Docker both run `streamlit run app.py` — the whole app
 is one process (PLAN PR-6.1); there is no backend.
-APP_AUTH=off (default): open demo session.
-APP_AUTH=on: force this gate before content pages (session guard only).
+APP_AUTH=on (default): force this gate before content pages.
+APP_AUTH=off: allow guest access without login gate.
 No `src.*` imports here (AGENTS.md guardrail).
 """
 
@@ -18,6 +18,18 @@ from ui_core import (
     page_config,
     start_rag_warmup,
 )
+
+# Handle OAuth callback before rendering UI
+if "code" in st.query_params:
+    from src.auth.google_oauth import handle_callback
+
+    code = st.query_params["code"]
+    st.query_params.clear()
+    try:
+        handle_callback(code)
+        st.switch_page("pages/2_Chat.py")
+    except Exception as e:
+        st.error(f"Authentication failed: {e}")
 
 page_config("Sign in — RAG Research Assistant")
 init_session_state()
@@ -48,17 +60,33 @@ login_box, _ = st.columns([2, 1])
 with login_box:
     with st.container(border=True):
         st.subheader("Sign in")
-        st.caption("Demo mode — no account needed. Your session stays local.")
-        if st.button(
-            "Continue as demo",
+
+        # Google OAuth button
+        from src.auth.google_oauth import get_google_auth_url
+
+        google_url = get_google_auth_url()
+        st.link_button(
+            "Sign in with Google",
+            google_url,
             type="primary",
             use_container_width=True,
-            key="demo_continue",
+            icon=":material/login:",
+        )
+
+        st.caption("Your data stays private. No account? Continue as guest.")
+
+        st.divider()
+
+        # Guest access button
+        from src.auth.google_oauth import create_guest_session
+
+        if st.button(
+            "Continue as guest",
+            type="secondary",
+            use_container_width=True,
+            key="guest_continue",
         ):
-            st.session_state.jwt = "demo-token"
-            st.session_state.user_email = "demo@local"
-            st.session_state.user_id = "demo"
-            st.session_state.show_pricing_modal = True
+            create_guest_session()
             st.switch_page("pages/2_Chat.py")
 
         st.divider()

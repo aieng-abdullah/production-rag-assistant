@@ -99,7 +99,7 @@ class TestQuotaConfig:
         assert isinstance(Config.STORAGE_LIMIT_MB, int)
         assert Config.STORAGE_LIMIT_MB > 0
 
-    def test_anon_query_limit_is_positive_int(self):
+    def test_guest_query_limit_is_positive_int(self):
         # Guest wall (menu.show_login_wall + chat sidebar) reads this.
-        assert isinstance(Config.ANON_QUERY_LIMIT, int)
-        assert Config.ANON_QUERY_LIMIT > 0
+        assert isinstance(Config.GUEST_QUERY_LIMIT, int)
+        assert Config.GUEST_QUERY_LIMIT > 0

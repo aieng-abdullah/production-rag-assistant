@@ -24,6 +24,9 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(200))
     picture_url: Mapped[str | None] = mapped_column(Text)
     google_sub: Mapped[str | None] = mapped_column(String(64), unique=True)
+    default_workspace: Mapped[str] = mapped_column(
+        String(50), default="academic"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
