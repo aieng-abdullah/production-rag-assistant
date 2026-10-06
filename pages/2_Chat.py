@@ -52,9 +52,23 @@ def _ui_provider_overrides() -> ProviderOverrides:
     )
 
 
+_WARM_ABSTAIN = (
+    "I couldn't find that in your documents — I'd rather tell you than guess. "
+    "Try rephrasing your question, or upload a document that covers it."
+)
+
+
+def _display_text(cited_answer) -> str:
+    """Warm human copy for abstentions; the raw exact reason stays in
+    verification/trace for audit."""
+    if (cited_answer.verification or {}).get("status") == "abstained":
+        return _WARM_ABSTAIN
+    return cited_answer.answer
+
+
 def display_cited_answer(cited_answer) -> None:
     """Display answer text, then sources as expanders."""
-    st.markdown(cited_answer.answer)
+    st.markdown(_display_text(cited_answer))
 
     if cited_answer.sources:
         st.markdown("---")
@@ -134,7 +148,7 @@ def handle_query(query: str) -> None:
             st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": cited_answer.answer,
+                    "content": _display_text(cited_answer),
                     "sources": [
                         {
                             "doc_id": s.doc_id,

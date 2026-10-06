@@ -275,7 +275,7 @@ class TestRunPipeline:
 
         trace = result.trace
         assert trace["workspace"] == "legal"
-        assert trace["prompt_version"] == "legal-v3"
+        assert trace["prompt_version"] == "legal-v4"
         assert trace["chunks"] == [
             {"source_id": 1, "doc_id": "d1", "page_num": 7, "cited": True}
         ]
