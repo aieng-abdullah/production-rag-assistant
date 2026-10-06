@@ -34,6 +34,36 @@ def test_academic_prompt_scopes_general_questions():
     assert "document-specific meaning as the general one" in prompt
 
 
+def test_academic_prompt_demands_complete_answer():
+    """Short-answer bug: one safe claim shipped while sources supported more.
+    Completeness must be an explicit rule, not model discretion."""
+    prompt = get_system_prompt("academic")
+    assert "Answer completely" in prompt
+    assert "do not stop after the first supported claim" in prompt
+
+
+def test_legal_prompt_demands_complete_answer():
+    prompt = get_system_prompt("legal")
+    assert "Answer completely" in prompt
+    assert "do not stop after the first supported claim" in prompt
+
+
+def test_academic_prompt_has_warm_tone_rule():
+    """Robot-answer bug: tone was never specified, so the model defaulted
+    to terse boilerplate. Warmth must be explicit — and explicitly bounded
+    by accuracy."""
+    prompt = get_system_prompt("academic")
+    assert "warm, helpful research assistant" in prompt
+    assert "Never robotic boilerplate" in prompt
+    assert "accuracy and citations come first" in prompt
+
+
+def test_legal_prompt_has_warm_tone_rule():
+    prompt = get_system_prompt("legal")
+    assert "warm and human" in prompt
+    assert "Never robotic boilerplate" in prompt
+
+
 def test_legal_prompt_requires_statute_style_and_abstain():
     prompt = get_system_prompt("legal")
     assert prompt == LEGAL_PROMPT
@@ -93,7 +123,7 @@ def test_prompt_version_keys_exist_and_validate_workspace():
     from src.generation.profiles import PROMPT_VERSIONS, get_prompt_version
 
     assert set(PROMPT_VERSIONS) == {"legal", "academic"}
-    assert get_prompt_version("legal") == "legal-v2"
-    assert get_prompt_version("academic") == "academic-v3"
+    assert get_prompt_version("legal") == "legal-v4"
+    assert get_prompt_version("academic") == "academic-v5"
     with pytest.raises(ValueError, match="Unknown workspace"):
         get_prompt_version("bogus")
