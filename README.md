@@ -18,6 +18,10 @@ Built for grad students and researchers drowning in arXiv PDFs who need trustwor
 
 **[Try the live demo →](https://groundedai-app.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
 
+<p align="center">
+  <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
+</p>
+
 ---
 
 ### Why this isn't another RAG demo
