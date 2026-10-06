@@ -5,7 +5,9 @@ pipeline.py:
 """
 from loguru import logger
 
+from src.config import Config
 from src.db.chroma_client import DEFAULT_TENANT
+from src.retrieval.boilerplate import drop_boilerplate
 from src.retrieval.bm25_index import bm25_search
 from src.retrieval.chroma_search import vector_search
 from src.retrieval.hybrid_fusion import rrf_fusion
@@ -15,7 +17,7 @@ from src.retrieval.cross_encoder import rerank
 def retrieval(
     query: str,
     bm25_index,
-    top_k: int = 5,
+    top_k: int = Config.TOP_K_RERANK,
     lf_retrieval_parent=None,
     tenant_id: str = DEFAULT_TENANT,
     workspace: str | None = None,
@@ -51,6 +53,7 @@ def retrieval(
             "bm25-search",
             lambda: bm25_search(bm25_index, query, top_k=20),
         )
+        bm25_results = drop_boilerplate(bm25_results)
         logger.info(f"BM25 search returned {len(bm25_results)} results")
 
     except Exception as e:
@@ -64,6 +67,7 @@ def retrieval(
                 query, top_k=20, tenant_id=tenant_id, workspace=workspace
             ),
         )
+        vector_results = drop_boilerplate(vector_results)
         logger.info(f"Vector search returned {len(vector_results)} results")
 
     except Exception as e:
