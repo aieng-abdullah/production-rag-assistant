@@ -4,9 +4,10 @@
 
 # GroundedAI
 
-### Citation-verified RAG for your documents
+### Citation-enforced RAG research assistant for legal & academic
 
 [![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented%20Generation-brightgreen)](#how-we-solve-it)
+[![Workspaces](https://img.shields.io/badge/workspaces-Legal%20%7C%20Academic-blue)](#workspaces)
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
@@ -15,9 +16,11 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-**Retrieval-Augmented Generation (RAG) for your documents. Ask questions — every sentence cites its source (page-level `[SOURCE N]`), enforced by schema validation, not prompts.**
+**Your RAG research assistant where citations are enforced by code, not requested by prompts.**
 
-**[Try the live  →](https://groundedai-app.streamlit.app/)**
+**Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
+
+**[Try the live demo →](https://groundedai-app.streamlit.app/)**
 
 <p align="center">
   <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
@@ -62,11 +65,11 @@ Validation is a **code-level gate**, not a prompt instruction. The model cannot 
 
 | You need | GroundedAI |
 |----------|-----------|
-| **Trustworthy answers** | Faithfulness **1.00** on golden set — every claim grounded, or the system says so |
+| **Answers in your domain** | Two workspaces on one engine: **legal** reports what statutes say (no legal advice, strict abstain); **academic** answers from your papers with provenance |
+| **Trustworthy answers** | Faithfulness **1.00** on golden set — every claim grounded in your corpus, or the system says so |
 | **Verifiable citations** | Per-sentence `[SOURCE N]` + page numbers — click through to the source text |
 | **Honesty by default** | Abstains instead of fabricating when your corpus lacks the answer |
 | **Choice of models** | Groq (free) → Anthropic → OpenAI failover; add your own key in the sidebar |
-| **Real workspaces** | Legal and academic prompts tuned for their domain — statute reporting vs paper citation |
 | **Privacy** | Multi-tenant isolation (your docs invisible to others) or self-host entirely |
 | **Free to start** | Live demo free; no card required |
 | **Yours to run** | Open source core — `streamlit run app.py` in 5 minutes |
