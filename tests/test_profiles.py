@@ -17,6 +17,23 @@ def test_academic_prompt_is_current_behavior():
     assert "JSON claims" in prompt
 
 
+def test_academic_prompt_preserves_terminology():
+    """Modifier stripping bug: source said 'Crowd-Informed Fine-Tuning (CIFT)',
+    answer claimed 'Fine-tuning is...' — rule 4 must forbid that."""
+    prompt = get_system_prompt("academic")
+    assert "never drop modifiers" in prompt
+    assert "broader base category" in prompt
+
+
+def test_academic_prompt_scopes_general_questions():
+    """General question + document-specific corpus → scoped answer or abstain,
+    never a document-specific meaning presented as the general one."""
+    prompt = get_system_prompt("academic")
+    assert "general definition" in prompt
+    assert "specific setting" in prompt
+    assert "document-specific meaning as the general one" in prompt
+
+
 def test_legal_prompt_requires_statute_style_and_abstain():
     prompt = get_system_prompt("legal")
     assert prompt == LEGAL_PROMPT
@@ -77,6 +94,6 @@ def test_prompt_version_keys_exist_and_validate_workspace():
 
     assert set(PROMPT_VERSIONS) == {"legal", "academic"}
     assert get_prompt_version("legal") == "legal-v2"
-    assert get_prompt_version("academic") == "academic-v2"
+    assert get_prompt_version("academic") == "academic-v3"
     with pytest.raises(ValueError, match="Unknown workspace"):
         get_prompt_version("bogus")
