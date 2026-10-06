@@ -71,10 +71,12 @@ Split: **PR-2a** `feat/data-layer` (models + Alembic) → **PR-2b** `feat/auth` 
 Branch: `feat/data-layer`, `feat/auth`
 - [x] Deps: fastapi uvicorn sqlalchemy alembic authlib pyjwt httpx
       (per-PR: sqlalchemy+alembic in 2a; web/auth deps in 2b)
+      — pyjwt removed later by `refactor/drop-jwt` (session-state auth)
 - [x] Models: User, Workspace(legal|academic), Document, Answer, AnswerTrace,
       UsageEvent, Subscription
 - [x] Alembic migrations; SQLite URL override in tests
 - [x] `/auth/google` + `/auth/google/callback` → JWT (7d, HS256, env secret)
+      — superseded: single-process session-state auth (no JWT)
 - [x] Google creds absent → 501 + README setup instructions (open-source rule)
 - [x] `require_user` dependency → `user_id` threads as tenant_id
 **Hope:** sign-in works locally, no token in logs, 501 path tested.
@@ -155,6 +157,7 @@ Branch: `feat/billing-flagged`
 ### PR-6 — Streamlit → API client
 Branch: `refactor/frontend-api-client`
 - [x] Google sign-in button → JWT via URL **fragment** (`#token=`) → `st.session_state`
+      — superseded: JWT removed (`refactor/drop-jwt`); identity in session_state only
 - [x] Sidebar/chat/upload via `httpx` + Bearer; status polling + spinner
 - [x] Workspace switcher (Legal / Academic)
 - [x] Remove ALL direct `src.*` imports from `app.py`
@@ -177,6 +180,17 @@ Branch: `revert/streamlit-only`
 - [ ] Public demo works on Streamlit Cloud with `streamlit run app.py` only
 **Hope:** demo reachable at $0; hosting case study closes with the API
 decision (restore the split or stay single-process).
+
+### refactor/drop-jwt — Session-state auth (no JWT)
+Branch: `refactor/drop-jwt`
+- [x] Delete `src/auth/jwt_handler.py`; drop pyjwt from requirements.txt
+- [x] Google OAuth callback + guest session write `user_id`/`user_email`/`user_tier`
+      directly to `st.session_state` (no token)
+- [x] `menu.py` / `dependencies.py` gate on `session_state.user_id`
+- [x] Remove `JWT_SECRET_KEY` from Config, `.env`, `.env.example`, secrets.toml
+- [x] Fixes Streamlit Cloud boot: no `import jwt` / ModuleNotFoundError
+**Tradeoff:** no signed expiry/tamper-proof token; session = browser session.
+Re-add JWT only if API split returns.
 
 ### PR-7 — Infra + business packaging
 Branch: `chore/infra-docs`
@@ -207,10 +221,10 @@ Bangla embeddings · Bangla OCR · bKash · teams/orgs · SSE streaming · SPA
 ## Security gates (ordered, each blocks next)
 1. Global Config mutation gone (PR-0)
 2. Cross-tenant leak test (PR-1)
-3. JWT secret env-only, no tokens logged (PR-2)
+3. ~~JWT secret env-only, no tokens logged (PR-2)~~ — superseded: no JWT
 4. Upload sanitization (PR-3)
 5. Webhook sig + env-gated routes + zero secrets in git (PR-5)
-6. Token memory-only (PR-6) — superseded by PR-6.1: tokens removed entirely
+6. ~~Token memory-only (PR-6)~~ — superseded by PR-6.1 + drop-jwt: no tokens
 7. Verifier prompt-injection hardened (PR-4b)
 
 ## Non-goals v1

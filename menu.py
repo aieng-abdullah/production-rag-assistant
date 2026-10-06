@@ -5,12 +5,9 @@ Single-process app (PLAN PR-6.1): every visitor is a local user
 content pages — still session-local, no backend involved.
 """
 
-import os
-
 import streamlit as st
 
 from pricing_modal import maybe_show_pricing_modal
-from src.auth.dependencies import require_user, is_guest
 from src.auth.google_oauth import create_guest_session
 from src.config import Config
 from ui_core import brand_html
@@ -89,7 +86,7 @@ def authenticated_menu() -> None:
 
 
 def logout() -> None:
-    """Clear every session key and return to Login (token never persisted)."""
+    """Clear every session state and return to Login (session-local only)."""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.switch_page(_LOGIN)
@@ -100,7 +97,7 @@ def menu() -> None:
     st.sidebar.markdown(brand_html(26), unsafe_allow_html=True)
 
     # Guest users get authenticated menu but with guest limits
-    if st.session_state.get("jwt"):
+    if st.session_state.get("user_id"):
         authenticated_menu()
         return
 
@@ -110,7 +107,7 @@ def menu() -> None:
 
 def menu_with_redirect() -> None:
     """Render menu; bounce to Login when auth is on and no session."""
-    if AUTH_ENABLED and not st.session_state.get("jwt"):
+    if AUTH_ENABLED and not st.session_state.get("user_id"):
         st.switch_page(_LOGIN)
     menu()
     maybe_show_pricing_modal()
