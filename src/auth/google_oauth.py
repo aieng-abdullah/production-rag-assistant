@@ -9,7 +9,6 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.auth.jwt_handler import create_token
 from src.config import Config
 from src.db.database import get_session_factory
 from src.db.models import Subscription, User
@@ -162,11 +161,7 @@ def handle_callback(code: str) -> tuple[int, str, str]:
         sub = _ensure_subscription(session, user_id)
         tier = sub.tier or "free"
 
-    # Create JWT
-    jwt_token = create_token(user_id, email, tier)
-
-    # Update session state
-    st.session_state.jwt = jwt_token
+    # Update session state (identity only — no JWT; session-local auth)
     st.session_state.user_id = str(user_id)
     st.session_state.user_email = email
     st.session_state.user_tier = tier
@@ -177,17 +172,10 @@ def handle_callback(code: str) -> tuple[int, str, str]:
     return user_id, email, tier
 
 
-def is_guest_user() -> bool:
-    """Check if current session is a guest."""
-    user_id = st.session_state.get("user_id", "")
-    return user_id.startswith("guest_")
-
-
 def create_guest_session() -> str:
     """Create a new guest session."""
     import uuid
     guest_id = f"guest_{uuid.uuid4().hex[:8]}"
-    st.session_state.jwt = "guest-token"
     st.session_state.user_id = guest_id
     st.session_state.user_email = "guest@local"
     st.session_state.user_tier = "free"

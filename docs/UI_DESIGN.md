@@ -3,7 +3,7 @@
 **Owner ticket:** PLAN PR-6 (`refactor/frontend-api-client`), accents in PR-4b/PR-5/PR-7.
 **Inspiration:** [antoineross/streamlit-saas-starter](https://github.com/antoineross/streamlit-saas-starter)
 (sidebar `page_link` menu + redirect guard, landing/dashboard page split, shadcn-styled cards).
-**Adapted, not copied:** we use FastAPI Google→JWT auth (PLAN locked), env-flagged Stripe,
+**Adapted, not copied:** we use Google OAuth → session-state auth (PLAN locked; JWT removed PR-6.1+drop-jwt), env-flagged Stripe,
 our own quota/verification features. No Supabase.
 
 **Guardrail (AGENTS.md):** no UI polish before service layer is proven.
@@ -14,8 +14,8 @@ This spec is documentation now; code lands in PR-6.
 ## 1. Principles
 
 1. Trust-first: verification/provenance is the product — surfaces get the accent color.
-2. Thin client: after PR-6, `app.py` + `pages/` import **zero** `src.*` — everything via
-   `httpx` + `Authorization: Bearer <jwt>`.
+2. Thin client (post-PR-6.1): pages import `src.services` directly in single-process
+   mode; auth identity lives in `st.session_state` (no JWT, no Bearer).
 3. shadcn look: neutral canvas, white cards, 1px borders, one primary accent.
 4. Feedback: ephemeral success = toast; actionable error = inline banner. Never both-only-toast.
 5. One concern per page. Chat never hosts settings; Documents never hosts chat.
@@ -37,23 +37,23 @@ pages/
 
 - `st.set_option("client.showSidebarNavigation", False)` → custom menu only.
 - `menu.py`: `authenticated_menu()` (Chat, Documents, Dashboard, Settings, Logout) vs
-  `unauthenticated_menu()` (Landing, Login). `menu_with_redirect()` → `st.switch_page("Login.py")`
-  when `st.session_state.jwt` missing. Every page starts with `menu_with_redirect()`.
+  `unauthenticated_menu()` (Landing, Login). `menu_with_redirect()` → `st.switch_page("app.py")`
+  when `st.session_state.user_id` missing. Every page starts with `menu_with_redirect()`.
 
-## 3. Auth & session flow (PR-2b backend + PR-6 frontend)
+## 3. Auth & session flow (PR-2b Google OAuth + PR-6.1 session-state)
 
 ```
-Login.py: st.button("Continue with Google", type="primary")
-  → GET {API}/auth/google/redirect (httpx, allow_redirects=False path)
-  → Google consent → API callback issues JWT
-  → back on Login: JWT in st.query_params → st.session_state.jwt (+ email, user_id)
-Sidebar: avatar/email line + workspace switcher + "Log out"
-Logout: clear every session_state key + st.switch_page("Login.py")  # token never persisted to disk
-Expiry: 401 from any httpx call → banner "Session expired" + redirect to Login
+app.py: st.link_button("Sign in with Google", get_google_auth_url())
+  → Google consent → app.py callback (st.query_params["code"])
+  → handle_callback: exchange code → userinfo → upsert user → session_state
+  → st.session_state: user_id, user_email, user_tier (+ guest counters reset)
+Sidebar: avatar/email line + "Log out"
+Logout: clear every session_state key + st.switch_page("app.py")
+Guest: create_guest_session() sets user_id="guest_*" (no JWT)
 ```
 
-State keys (only these): `jwt`, `user_email`, `user_id`, `workspace`, `messages`,
-`doc_statuses`, `quota`.
+State keys (only these): `user_email`, `user_id`, `user_tier`, `workspace`,
+`messages`, `doc_statuses`, `quota`, `guest_queries`, `guest_docs`.
 
 ## 4. Design system
 
@@ -136,7 +136,7 @@ never toast inside `st.cache_*`; errors stay visible inline after toast fades.
 | When | Deliverable |
 |---|---|
 | **This PR** | `docs/UI_DESIGN.md` only (no code) |
-| **PR-6a** | `menu.py` + `Login.py` + JWT/session + httpx client + gut `src.*` from `app.py` |
+| **PR-6a** | `menu.py` + login gate + session-state auth (JWT later removed) |
 | **PR-6b** | `pages/` restructure, shadcn components, `styles/main.css`, theme tokens, toasts |
 | **PR-4b** | verify badge + provenance view (Chat + Dashboard) |
 | **PR-5** | pricing cards activate (env-flag), upgrade toast |

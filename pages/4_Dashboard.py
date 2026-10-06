@@ -17,7 +17,7 @@ menu_with_redirect()
 
 # --- Metric cards -------------------------------------------------------
 turns = [m for m in st.session_state.messages if m.get("role") == "user"]
-plan_name = "Free" if st.session_state.get("jwt") else "—"
+plan_name = "Free" if st.session_state.get("user_id") else "—"
 
 c1, c2, c3 = st.columns(3)
 with c1:

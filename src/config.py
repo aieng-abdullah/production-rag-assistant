@@ -6,6 +6,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Streamlit secrets.toml fallback (gitignored; populated on Streamlit Cloud).
+# Local .env wins — load_dotenv already set those keys, setdefault fills gaps.
+# No streamlit import: src/ stays framework-free (AGENTS.md).
+_SECRETS_TOML = Path(__file__).parent.parent / ".streamlit" / "secrets.toml"
+if _SECRETS_TOML.is_file():
+    import tomllib
+
+    with _SECRETS_TOML.open("rb") as _f:
+        for _key, _val in tomllib.load(_f).items():
+            os.environ.setdefault(_key, str(_val))
+
 
 class Config:
     # --- Paths ---
@@ -81,9 +92,6 @@ class Config:
     # Google OAuth (PLAN PR-2b)
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-
-    # JWT (PLAN PR-2b)
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 
     # Auth mode
     APP_AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"

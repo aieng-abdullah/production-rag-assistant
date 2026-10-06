@@ -5,10 +5,8 @@ Only accessible to admin users (hardcoded email for simplicity).
 
 import streamlit as st
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
 
 from menu import menu_with_redirect
-from src.auth.dependencies import is_guest, get_current_user_id
 from src.config import Config
 from src.db.database import get_session_factory
 from src.db.models import User, Subscription, UsageEvent

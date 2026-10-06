@@ -22,7 +22,6 @@ _warmup_started = False
 
 # Spec §3: the only allowed session keys (session-local auth, PR-6.1).
 _SESSION_DEFAULTS = {
-    "jwt": None,
     "user_email": None,
     "user_id": None,
     "workspace": "academic",
