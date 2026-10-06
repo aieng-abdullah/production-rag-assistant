@@ -14,7 +14,12 @@ from src.auth.dependencies import is_guest, get_current_tier
 from src.config import Config
 from src.db.chroma_client import count_chunks, has_chunks
 from src.generation.providers import ProviderOverrides
-from src.services import RAGService, check_query_quota, record_query_usage
+from src.services import (
+    RAGService,
+    TIER_MULTIPLIERS,
+    check_query_quota,
+    record_query_usage,
+)
 from src.services.bm25_cache import get_bm25
 from ui_core import (
     apply_workspace_accent,

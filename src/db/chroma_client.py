@@ -149,9 +149,9 @@ def load_all_chunks(
     return chunks
 
 
-def has_chunks(tenant_id: str = DEFAULT_TENANT) -> bool:
-    """Check if any chunks exist for a tenant without loading them."""
-    return count_chunks(tenant_id) > 0
+def has_chunks(tenant_id: str = DEFAULT_TENANT, workspace: str | None = None) -> bool:
+    """Check if any chunks exist for a tenant (optionally one workspace)."""
+    return count_chunks(tenant_id, workspace) > 0
 
 
 def reassign_tenant(old_tenant: str, new_tenant: str) -> int:

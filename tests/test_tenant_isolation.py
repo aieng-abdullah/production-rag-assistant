@@ -69,6 +69,17 @@ class TestTenantIsolation:
         assert tenant_store.has_chunks("tenant-a") is True
         assert tenant_store.has_chunks("tenant-b") is False
 
+    def test_has_chunks_accepts_workspace_filter(self, tenant_store):
+        """has_chunks(tenant, workspace) must scope to one niche (PR-4)."""
+        legal = [{**c, "workspace": "legal"} for c in _chunks("law.pdf")]
+        academic = [{**c, "workspace": "academic"} for c in _chunks("paper.pdf")]
+        tenant_store.upsert_chunks(legal + academic, tenant_id="tenant-a")
+
+        assert tenant_store.has_chunks("tenant-a", workspace="legal") is True
+        assert tenant_store.has_chunks("tenant-a", workspace="academic") is True
+        assert tenant_store.has_chunks("tenant-a", workspace="missing") is False
+        assert tenant_store.has_chunks("tenant-b", workspace="legal") is False
+
     def test_load_all_chunks_never_crosses_partitions(self, tenant_store):
         tenant_store.upsert_chunks(_chunks("a-doc"), tenant_id="tenant-a")
 
