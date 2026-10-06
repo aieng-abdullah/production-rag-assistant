@@ -37,7 +37,13 @@ def _get_client_secret() -> str:
 
 
 def _get_redirect_uri() -> str:
-    return f"{Config.APP_BASE_URL}/auth/google/callback"
+    """OAuth redirect target = app root.
+
+    Streamlit serves app.py at the app URL root; /auth/* paths 404 on
+    Streamlit Cloud. Callback code arrives as ?code= on the root page.
+    APP_BASE_URL must match the deployed host (localhost or *.streamlit.app).
+    """
+    return Config.APP_BASE_URL.rstrip("/") + "/"
 
 
 def get_google_auth_url() -> str:
