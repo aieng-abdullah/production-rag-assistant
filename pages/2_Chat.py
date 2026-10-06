@@ -66,24 +66,43 @@ def _display_text(cited_answer) -> str:
     return cited_answer.answer
 
 
-def display_cited_answer(cited_answer) -> None:
-    """Display answer text, then sources as expanders."""
-    st.markdown(_display_text(cited_answer))
+def _src(source, key):
+    """Read a source field from a Source object or its stored dict form."""
+    return source[key] if isinstance(source, dict) else getattr(source, key, None)
 
+
+def render_sources(sources) -> None:
+    """Compact sources: page chips + one collapsed expander.
+
+    Per-source expanders (old) pushed the answer off-screen — a chip line
+    keeps the answer dominant and the passages one click away.
+    """
+    items = list(sources or [])
+    if not items:
+        return
+
+    chips = " · ".join(
+        f"[{i}] p.{_src(s, 'page_num') if _src(s, 'page_num') is not None else '—'}"
+        for i, s in enumerate(items, 1)
+    )
+    st.markdown(f"**Sources** — {chips}")
+
+    docs = {str(_src(s, "doc_id")) for s in items}
+    doc_label = next(iter(docs)) if len(docs) == 1 else f"{len(docs)} documents"
+    with st.expander(f"Read the {len(items)} source passages · {doc_label}"):
+        for i, s in enumerate(items, 1):
+            page = _src(s, "page_num")
+            text = _src(s, "text") or ""
+            st.markdown(f"**[{i}]** `{_src(s, 'doc_id')}` · page {page}")
+            st.caption(text[:500] + "..." if len(text) > 500 else text)
+
+
+def display_cited_answer(cited_answer) -> None:
+    """Display answer text, then compact sources."""
+    st.markdown(_display_text(cited_answer))
     if cited_answer.sources:
         st.markdown("---")
-        st.markdown("**Sources:**")
-        for i, source in enumerate(cited_answer.sources, 1):
-            with st.expander(
-                f"[{i}] {source.doc_id} - Page {source.page_num}"
-            ):
-                st.markdown(f"**Document:** `{source.doc_id}`")
-                st.markdown(f"**Page:** {source.page_num}")
-                st.markdown("**Text:**")
-                text = source.text
-                st.text(
-                    text[:500] + "..." if len(text) > 500 else text
-                )
+        render_sources(cited_answer.sources)
 
 
 def _get_tenant_id() -> str:
@@ -272,20 +291,9 @@ def render_chat() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-            if message["role"] == "assistant" and "sources" in message:
+            if message["role"] == "assistant" and message.get("sources"):
                 st.markdown("---")
-                st.markdown("**Sources:**")
-                for i, source in enumerate(message["sources"], 1):
-                    with st.expander(
-                        f"[{i}] {source['doc_id']} - Page {source['page_num']}"
-                    ):
-                        st.markdown(f"**Document:** `{source['doc_id']}`")
-                        st.markdown(f"**Page:** {source['page_num']}")
-                        st.markdown("**Text:**")
-                        text = source["text"]
-                        st.text(
-                            text[:500] + "..." if len(text) > 500 else text
-                        )
+                render_sources(message["sources"])
 
     if prompt := st.chat_input("Ask a question about your documents..."):
         with st.chat_message("user"):
