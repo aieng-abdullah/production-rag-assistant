@@ -20,7 +20,7 @@
 
 **Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
 
-**[Try the live demo →](https://groundedai-app.streamlit.app/)**
+**[Try the live  →](https://groundedai-app.streamlit.app/)**
 
 <p align="center">
   <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
