@@ -2,7 +2,9 @@
 
 <img width="300" height="300" alt="artificial-intelligence" src="https://github.com/user-attachments/assets/b92417d0-a09f-4353-883b-d6f545e727e8" />
 
-# Production RAG Research Assistant
+# GroundedAI
+
+### Citation-verified AI for your documents
 
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
@@ -12,44 +14,207 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-### Ask research papers questions. Every sentence cites its source — enforced by schema validation, not prompts.
+**Ask your documents questions. Every sentence cites its source — enforced by schema validation, not prompts.**
 
-Built for grad students and researchers drowning in arXiv PDFs who need trustworthy answers with page-level provenance — not confident-sounding guesses.
-
-**[Try the live demo →](https://groundedai-app.streamlit.app/)** · Upload a research paper PDF and ask questions with grounded citations.
+**[Try the live demo →](https://groundedai-app.streamlit.app/)**
 
 <p align="center">
   <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
 </p>
 
----
-
-### Why this isn't another RAG demo
-
-| Differentiator | What most demos do | What this does |
-|---|---|---|
-| **Citation enforcement** | Prompt says "cite sources" | Pydantic validates **every sentence** for `[SOURCE N]`; violations rejected at the validation layer |
-| **Retrieval** | Vector-only | BM25 ∥ vector search → Reciprocal Rank Fusion → cross-encoder rerank |
-| **Latency forensics** | Guess at slowness | Langfuse traces (n=141): reranker is the bottleneck — measured, not guessed |
-| **Provider resilience** | Single LLM, dies on rate limit | Groq → Anthropic → OpenAI failover with retry + exponential backoff |
-
 </div>
 
 ---
 
-### Who it's built for
+## The problem
 
-| If you are... | This solves... |
-|---|---|
-| A researcher | Cross-paper synthesis without manual skimming |
-| An engineer | Extracting implementation details from technical papers |
-| A student | Citeable answers you can actually reference in writing |
+AI assistants answer questions about your documents — and then **guess**.
+
+- **LLMs fabricate.** Ask about a paper, statute, or contract and you get a confident answer that isn't in the source. You find out too late.
+- **"Cite sources" prompts don't work.** Models sprinkle citations on some sentences and skip others. Partial hallucination looks verified.
+- **Manual reading doesn't scale.** Researchers skim dozens of PDFs. Lawyers grep through acts and case law. Students re-read the same chapter hoping to find the one passage that matters.
+- **Wrong citations carry real risk.** Academic integrity violations. Misquoted statutes. Bad advice built on a paragraph that never said that.
+
+**ChatGPT guesses. We verify — every sentence, against the source, before you see it.**
 
 ---
 
-## Results (Ragas, n=5 golden set)
+## How we solve it
 
-Evaluated on 5 question–answer pairs from *Attention Is All You Need* with Groq LLM-as-judge. Source: `results.json`.
+Upload a PDF → ask a question → get an answer where **every factual sentence carries a page-level `[SOURCE N]` citation**, validated by schema before the answer reaches you.
+
+| Step | What happens | Why it matters |
+|------|--------------|----------------|
+| **1. Ingest** | PyMuPDF parses pages, text split into tight 256-char chunks, embedded, stored with tenant isolation | Page numbers survive to citation time |
+| **2. Retrieve** | BM25 (exact keywords) ∥ vector (semantic) → Reciprocal Rank Fusion → cross-encoder rerank | Right passage found even when wording differs |
+| **3. Answer** | LLM grounded on retrieved chunks only; identifies sources first, then answers | Model reasons over evidence, not memory |
+| **4. Validate** | Pydantic checks **every sentence** for valid `[SOURCE N]`; violations rejected | Uncited sentences never reach you |
+| **5. Abstain** | Sources insufficient → "I don't have enough information" | Honesty over completeness |
+
+Validation is a **code-level gate**, not a prompt instruction. The model cannot skip it.
+
+---
+
+## Why people use GroundedAI
+
+| You need | GroundedAI |
+|----------|-----------|
+| **Trustworthy answers** | Faithfulness **1.00** on golden set — every claim grounded, or the system says so |
+| **Verifiable citations** | Per-sentence `[SOURCE N]` + page numbers — click through to the source text |
+| **Honesty by default** | Abstains instead of fabricating when your corpus lacks the answer |
+| **Choice of models** | Groq (free) → Anthropic → OpenAI failover; add your own key in the sidebar |
+| **Real workspaces** | Legal and academic prompts tuned for their domain — statute reporting vs paper citation |
+| **Privacy** | Multi-tenant isolation (your docs invisible to others) or self-host entirely |
+| **Free to start** | Live demo free; no card required |
+| **Yours to run** | Open source core — `streamlit run app.py` in 5 minutes |
+
+### What makes this different from another RAG demo
+
+| Differentiator | What most demos do | What this does |
+|---|---|---|
+| **Citation enforcement** | Prompt says "cite sources" | Pydantic validates **every sentence** for `[SOURCE N]`; violations rejected at the validation layer |
+| **Retrieval** | Vector-only | BM25 ∥ vector → RRF → cross-encoder rerank |
+| **Latency forensics** | Guess at slowness | Langfuse traces (n=141): reranker is the bottleneck — measured, not guessed |
+| **Provider resilience** | Single LLM, dies on rate limit | Groq → Anthropic → OpenAI failover with retry + exponential backoff |
+
+---
+
+## Who it's for
+
+| If you are... | This solves... |
+|---|---|
+| **A researcher** | Cross-paper synthesis without manual skimming; every claim traceable to a page |
+| **A grad student** | Citeable answers you can actually reference in writing |
+| **An engineer** | Extracting implementation details from technical papers |
+| **A lawyer / legal team** | Statute and contract Q&A with report-not-advice discipline and strict abstain |
+| **An academic** | Literature review support that won't invent citations |
+
+---
+
+## Workspaces
+
+One engine, domain-specific profiles — prompt behavior, citation format, and retrieval tuned per workspace.
+
+| Workspace | Status | What it does |
+|-----------|--------|--------------|
+| **Academic** | 🟢 Live | Paper citation, cross-paper synthesis, provenance on every claim |
+| **Legal** | 🟢 Live | Statute-focused reporting, no legal advice, strict abstain when sources don't support an answer |
+| **Medical** | 📋 Phase 2 | Clinical guidelines, PubMed corpus, ICD-10 coding assistance — citation-verified medical Q&A |
+| **Bangla** | 📋 Phase 2 | Multilingual embeddings (multilingual-e5) + Bangla OCR for scanned legal docs |
+
+The core engine (hybrid retrieval + citation verification + workspace profiles) is domain-agnostic. Future domains change prompt profiles and chunk metadata — not the pipeline.
+
+---
+
+## Features
+
+- **Citation-verified answers** — per-sentence `[SOURCE N]` validation, page-level provenance
+- **Hybrid retrieval** — BM25 + vector, fused with RRF, reranked by cross-encoder
+- **Graceful abstention** — "not enough information" instead of confident guessing
+- **Google login** — OAuth; guest mode without an account
+- **Free-tier quotas** — daily query, document, and storage limits with upgrade path
+- **Provider failover** — Groq → Anthropic → OpenAI with exponential backoff
+- **Provenance traces** — queries, chunks, and verification stored with each answer
+- **Observability** — Langfuse traces on retrieval, prompt build, LLM call, validation
+- **Multi-tenant isolation** — Chroma metadata `tenant_id` filter on every read path
+- **Self-host ready** — local mode or Docker Compose; your data stays yours
+
+---
+
+## Technology
+
+How each piece solves part of the problem:
+
+| Layer | Technology | Problem it solves |
+|---|---|---|
+| PDF parsing | **PyMuPDF** | Page-aware extraction → real page numbers in citations |
+| Chunking | **LangChain RecursiveCharacterTextSplitter** | 256-char chunks, 100 overlap → tight context, less noise to fabricate from |
+| Embeddings | **all-MiniLM-L6-v2** | Semantic search that survives reworded queries |
+| Vector store | **ChromaDB** | Fast similarity search + `tenant_id` isolation |
+| Sparse retrieval | **BM25** | Exact keyword match for terms like "scaled dot-product attention" |
+| Fusion | **Reciprocal Rank Fusion** | Combines keyword + semantic rankings without score normalization |
+| Reranker | **ms-marco-MiniLM-L-6-v2** | Cross-encoder precision on top candidates only |
+| LLM | **Groq / Anthropic / OpenAI** | Fast default (free Groq), user choice, failover on rate limits |
+| Orchestration | **LangChain** | Provider-agnostic chains, retries, structured output |
+| Validation | **Pydantic** | Hard gate: uncited sentence → rejected response |
+| UI | **Streamlit** | Single-process app; upload → chat → dashboard in one deploy |
+| Observability | **Langfuse** | Latency forensics — found reranker, not LLM, is the bottleneck |
+| Evaluation | **Ragas** | Faithfulness/relevancy gates on a golden set |
+| CI | **GitHub Actions** | Lint + 291 tests on every PR |
+
+### Pipeline
+
+```text
+PDF Upload
+    ↓
+PyMuPDF Parser — page-aware extraction
+    ↓
+RecursiveCharacterTextSplitter — 256 character chunks, 100 overlap
+    ↓
+sentence-transformers/all-MiniLM-L6-v2 embeddings
+    ↓
+ChromaDB — cosine similarity vector store (tenant-isolated)
+    ↓
+User Query
+     ├── BM25 Search (Top 20)
+     ├── Vector Search (Top 20)
+     ↓
+Reciprocal Rank Fusion (score = 1 / (k + rank), k=60)
+     ↓
+Cross-Encoder Reranker — ms-marco-MiniLM-L-6-v2
+     ↓
+Top 5 Chunks → Citation Prompt Builder (workspace profile)
+     ↓
+LLM Provider Chain (retry + exponential backoff + failover)
+     ├── Groq (default llama-3.1-8b-instant) — free
+     ├── Anthropic (Claude) — optional, user-provided key
+     └── OpenAI (GPT-4o) — optional, user-provided key
+     ↓
+Pydantic Citation Validator — per-sentence [SOURCE N] check
+     ↓
+Final Response with page-level citations
+```
+
+---
+
+## Plans
+
+Matches the in-app pricing modal:
+
+|  | **Free** (live) | **Pro** (coming soon) |
+|--|---|---|
+| Price | $0 | $9 / mo |
+| Daily queries | 500 | 5,000 |
+| Workspaces | 1 | 3 |
+| Documents | 5 | 100 |
+| Support | Community | Priority |
+
+Teams ($29/mo, admin + SSO) planned with billing activation (Stripe; Bangladesh-local rails alongside).
+
+---
+
+## Roadmap
+
+| Domain / capability | Status | Notes |
+|--------|--------|-------|
+| **Medical domain** | Planned | Clinical guidelines, PubMed corpus, ICD-10 coding assistance; citation-verified medical Q&A |
+| **Bangla support** | Planned | Multilingual embeddings (multilingual-e5) + Bangla OCR for scanned legal docs |
+| **Legal domain expansion** | Planned | Contract Act 1872, Companies Act 1994, case law corpus; section-aware retrieval |
+| **Reflective retrieval (T2)** | Designed | LangGraph orchestrator: query → retrieve → reflect → re-retrieve → answer |
+| **Workflow agents (T3)** | Designed | Domain agents: contract review, literature review, compliance check |
+| **bKash payments** | Planned | Bangladesh-local payment rail alongside Stripe |
+| **Teams / orgs** | Planned | Shared workspaces, admin controls, SSO |
+| **SSE streaming** | Planned | Token-by-token answer streaming with citation markers |
+| **SPA frontend** | Planned | React/Vue SPA replacing Streamlit for production UX |
+
+The engine stays shared; only prompt profiles, chunk metadata schemas, and citation formats change per domain (Legal / Academic / **Medical** / Bangla).
+
+---
+---
+
+## For engineers
+
+### Results (Ragas, n=5 golden set)
 
 | Metric | Score | Threshold | Status |
 |---|---|---|---|
@@ -68,48 +233,17 @@ Golden set is intentionally small (n=5) and honest about it. Target: expand to 3
 
 ---
 
-## Architecture
+### Grounding design (5 layers)
 
-### Document processing
-
-```text
-PDF Upload
-    ↓
-PyMuPDF Parser — page-aware extraction
-    ↓
-RecursiveCharacterTextSplitter — 256 character chunks, 100 overlap
-    ↓
-sentence-transformers/all-MiniLM-L6-v2 embeddings
-    ↓
-ChromaDB — cosine similarity vector store
-```
-
-### Retrieval and generation
-
-```text
-User Query
-     ├── BM25 Search (Top 20)
-     ├── Vector Search (Top 20)
-     ↓
-Reciprocal Rank Fusion (score = 1 / (k + rank), k=60)
-     ↓
-Cross-Encoder Reranker — ms-marco-MiniLM-L-6-v2
-     ↓
-Top 5 Chunks → Citation Prompt Builder
-     ↓
-LLM Provider Chain (retry + exponential backoff + failover)
-     ├── Groq (default llama-3.1-8b-instant) — free
-     ├── Anthropic (Claude) — optional, user-provided key
-     └── OpenAI (GPT-4o) — optional, user-provided key
-     ↓
-Pydantic Citation Validator — per-sentence [SOURCE N] check
-     ↓
-Final Response with page-level citations
-```
+1. **Tighter chunking** — 350 → 256 characters, 100 overlap. Tighter context = less noise to fabricate from.
+2. **Grounding prompt** — "ONLY use information from the provided sources." / "If sources don't contain enough information, say so." / cite every factual claim with `[SOURCE N]`.
+3. **Chain-of-thought source identification** — model identifies relevant sources before answering. Explicit source reasoning first; generation second.
+4. **Per-sentence citation validation** — Pydantic rejects any sentence missing `[SOURCE N]`. Previous version only required one citation total — partial hallucination slipped through.
+5. **Graceful abstention** — insufficient sources → "I don't have enough information" instead of guessing. Completeness traded for accuracy.
 
 ---
 
-## Key technical decisions
+### Key technical decisions
 
 <details>
 <summary><b>Why hybrid retrieval instead of vector-only?</b></summary>
@@ -165,21 +299,11 @@ See [How I found the bottleneck](#how-i-found-the-bottleneck).
 
 ---
 
-## Grounding design (5 layers)
-
-1. **Tighter chunking** — 350 → 256 characters, 100 overlap. Tighter context = less noise to fabricate from.
-2. **Grounding prompt** — "ONLY use information from the provided sources." / "If sources don't contain enough information, say so." / cite every factual claim with `[SOURCE N]`.
-3. **Chain-of-thought source identification** — model identifies relevant sources before answering. Explicit source reasoning first; generation second.
-4. **Per-sentence citation validation** — Pydantic rejects any sentence missing `[SOURCE N]`. Previous version only required one citation total — partial hallucination slipped through.
-5. **Graceful abstention** — insufficient sources → "I don't have enough information" instead of guessing. Completeness traded for accuracy.
-
----
-
-## How I found the bottleneck
+### How I found the bottleneck
 
 Every request traced end-to-end with Langfuse. **141 complete traces** collected across real usage.
 
-### Latency profile (n=141)
+#### Latency profile (n=141)
 
 | Metric | Latency | What it means |
 |--------|---------|---------------|
@@ -188,7 +312,7 @@ Every request traced end-to-end with Langfuse. **141 complete traces** collected
 | p95 | 11.09s | 1 in 20 users waits this long |
 | p99 | 14.06s | Worst case observed |
 
-### Component breakdown
+#### Component breakdown
 
 | Component | p50 | p90 | p95 | p99 | Role |
 |-----------|-----|-----|-----|-----|------|
@@ -198,7 +322,7 @@ Every request traced end-to-end with Langfuse. **141 complete traces** collected
 | ChatGroq (LLM) | 0.57s | 0.93s | 1.19s | 2.52s | Generation |
 | Vector search | 0.03s | 0.06s | 0.22s | 0.38s | Embedding lookup |
 
-### Key finding: the LLM is not the bottleneck
+#### Key finding: the LLM is not the bottleneck
 
 Common assumption: LLM generation drives latency.
 
@@ -219,7 +343,7 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 
 ---
 
-## LLM provider failover
+### LLM provider failover
 
 | Provider | Model (default) | Cost | Setup |
 |----------|-----------------|------|-------|
@@ -235,7 +359,7 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 
 ---
 
-## Known limitations
+### Known limitations
 
 | Limitation | Status | Planned fix |
 |---|---|---|
@@ -249,7 +373,7 @@ CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every
 
 ---
 
-## What I would change
+### What I would change
 
 Retrospective if rebuilding with what I know now:
 
@@ -259,25 +383,6 @@ Retrospective if rebuilding with what I know now:
 4. **Wire the CI gate on day one.** Claiming an eval gate that doesn't block merges was a documentation-drift bug — this rewrite corrects the claim; next step is making it true.
 5. **Smaller reranker, or GPU, earlier.** Reranker dominates p95 variance (12×) — obvious first target when faithfulness is already 1.00.
 6. **Character vs token wording.** Chunk size is characters (`RecursiveCharacterTextSplitter`), not tokens — earlier README said tokens. Precision in claims matters.
-
----
-
-## Technology stack
-
-| Layer | Technology |
-|---|---|
-| PDF parsing | PyMuPDF |
-| Chunking | LangChain RecursiveCharacterTextSplitter |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Vector DB | ChromaDB |
-| Sparse retrieval | BM25Retriever |
-| Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| LLM | Groq / Anthropic / OpenAI (retry + failover) |
-| Orchestration | LangChain |
-| UI | Streamlit |
-| Observability | Langfuse |
-| Evaluation | Ragas |
-| CI | GitHub Actions |
 
 ---
 
@@ -303,7 +408,7 @@ Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` 
 
 ---
 
-## Running evaluation
+### Running evaluation
 
 ```bash
 python3 eval/eval_runner.py
@@ -313,7 +418,7 @@ Writes `results.json` (metric scores, thresholds, per-sample outputs).
 
 ---
 
-## Running tests
+### Running tests
 
 ```bash
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
@@ -323,33 +428,13 @@ CI runs the same command on every push/PR.
 
 ---
 
-## Performance notes
+### Performance notes
 
 End-to-end latency: **1.54s p50 → 14.06s p99** across 141 traced requests.
 
 Cross-encoder reranker accounts for the dominant share of tail latency on CPU (12× p50→p95 variance).
 
 Current implementation prioritizes retrieval quality and grounded answers over raw latency.
-
----
-
-## Roadmap (Phase 2+)
-
-This product is built for extensibility. The core engine (hybrid retrieval + citation verification + workspace profiles) is domain-agnostic. Next phases:
-
-| Domain | Status | Notes |
-|--------|--------|-------|
-| **Bangla support** | Planned | Multilingual embeddings (multilingual-e5) + Bangla OCR for scanned legal docs |
-| **Legal domain expansion** | Planned | Contract Act 1872, Companies Act 1994, case law corpus; section-aware retrieval |
-| **Medical domain** | Planned | Clinical guidelines, PubMed corpus, ICD-10 coding assistance; citation-verified medical Q&A |
-| **Reflective retrieval (T2)** | Designed | LangGraph orchestrator: query → retrieve → reflect → re-retrieve → answer |
-| **Workflow agents (T3)** | Designed | Domain-specific agents: contract review, literature review, compliance check |
-| **bKash payments** | Planned | Bangladesh-local payment rail alongside Stripe |
-| **Teams / orgs** | Planned | Shared workspaces, admin controls, SSO |
-| **SSE streaming** | Planned | Token-by-token answer streaming with citation markers |
-| **SPA frontend** | Planned | React/Vue SPA replacing Streamlit for production UX |
-
-The engine stays shared; only prompt profiles, chunk metadata schemas, and citation formats change per domain (Legal / Academic / **Medical** / Bangla).
 
 ---
 
