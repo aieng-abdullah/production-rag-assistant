@@ -679,3 +679,24 @@ footer,
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Chat: compact sources + message polish --------------------------- */
+[data-testid="stChatMessage"] {
+  border-radius: 14px;
+  padding: 0.4rem 0.5rem;
+}
+
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {
+  margin-bottom: 0.5rem;
+}
+
+[data-testid="stChatMessage"] div[data-testid="stExpander"] details {
+  border-radius: 10px;
+}
+
+[data-testid="stChatMessage"] div[data-testid="stExpander"]
+  .streamlit-expanderHeader {
+  font-size: 0.86rem;
+  font-weight: 550;
+  color: #475569;
+}
