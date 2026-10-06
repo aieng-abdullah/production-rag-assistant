@@ -56,7 +56,9 @@ class Config:
     # --- Retrieval Params ---
     CHUNK_SIZE = 256
     CHUNK_OVERLAP = 100
-    TOP_K_RERANK = 5
+    # 8: reranker drops good chunks at 5 (measured — intro chunk pushed out,
+    # junk claimed a slot). Wider prompt costs ~nothing; rerank scans top-20 anyway.
+    TOP_K_RERANK = 8
     RRF_K = 60
 
     # --- Quotas (PLAN PR-3b, env-tunable) ---

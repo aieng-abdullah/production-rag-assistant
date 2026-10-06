@@ -137,3 +137,49 @@ class TestRetrievalErrors:
             retrieval("query", MagicMock())
         mock_vector.assert_not_called()
         mock_rerank.assert_not_called()
+
+
+JUNK = {
+    "chunk_id": "junk",
+    "text": (
+        "See discussions, stats, and author profiles for this publication at: "
+        "https://www.researchgate.net/publication/314116018"
+    ),
+}
+REAL = {"chunk_id": "real", "text": "Real document content about DNN training."}
+
+
+class TestBoilerplateFiltered:
+    """Junk chunks must die before RRF — a reranked furniture slot steals
+    from real content (measured: ResearchGate header at rank #2)."""
+
+    @patch("src.retrieval.pipeline.rerank")
+    @patch("src.retrieval.pipeline.vector_search")
+    @patch("src.retrieval.pipeline.bm25_search")
+    def test_junk_never_reaches_rrf(self, mock_bm25, mock_vector, mock_rerank):
+        mock_bm25.return_value = [JUNK, REAL]
+        mock_vector.return_value = [JUNK, REAL]
+        mock_rerank.return_value = []
+
+        retrieval("query", MagicMock())
+
+        rrf_call = mock_rerank.call_args[0][1]
+        chunk_ids = [c["chunk_id"] for c in rrf_call]
+        assert "junk" not in chunk_ids
+        assert "real" in chunk_ids
+
+    @patch("src.retrieval.pipeline.rerank")
+    @patch("src.retrieval.pipeline.vector_search")
+    @patch("src.retrieval.pipeline.bm25_search")
+    def test_default_top_k_follows_config(self, mock_bm25, mock_vector, mock_rerank):
+        """Pipeline default must come from Config.TOP_K_RERANK, not a literal."""
+        from src.config import Config
+
+        mock_bm25.return_value = []
+        mock_vector.return_value = []
+        mock_rerank.return_value = []
+
+        retrieval("query", MagicMock())
+
+        assert mock_rerank.call_args[0][2] == Config.TOP_K_RERANK
+        assert Config.TOP_K_RERANK == 8
