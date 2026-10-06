@@ -4,7 +4,7 @@
 
 # GroundedAI
 
-### Domain RAG for legal and academic research
+### Citation-enforced RAG research assistant for legal & academic
 
 [![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented%20Generation-brightgreen)](#how-we-solve-it)
 [![Workspaces](https://img.shields.io/badge/workspaces-Legal%20%7C%20Academic-blue)](#workspaces)
@@ -16,7 +16,9 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-**Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, enforced by schema validation, not prompts.**
+**Your RAG research assistant where citations are enforced by code, not requested by prompts.**
+
+**Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
 
 **[Try the live demo →](https://groundedai-app.streamlit.app/)**
 
