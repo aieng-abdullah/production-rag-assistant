@@ -136,11 +136,20 @@ def brand_html(size: int = 28) -> str:
 
 
 def page_config(title: str) -> None:
-    """Common page config — Material Symbols icon, no emoji (spec §1.6)."""
+    """Common page config — Material Symbols icon, no emoji (spec §1.6).
+
+    menu_items clears the default About/Get Help entries; footer chrome is
+    hidden via styles/main.css (Streamlit Cloud "Hosted with Streamlit").
+    """
     st.set_page_config(
         page_title=title,
         page_icon=":material/library_books:",
         layout="wide",
+        menu_items={
+            "Get Help": None,
+            "Report a bug": None,
+            "About": None,
+        },
     )
 
 

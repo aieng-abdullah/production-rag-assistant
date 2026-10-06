@@ -162,12 +162,16 @@ h3 {
    Primary: .streamlit/config.toml → toolbarMode="viewer" + ui.hideTopBar=true.
    Those hide the Deploy button, GitHub/Fork host toolbar items, rerun/stop,
    and the hamburger main menu. This block is belt-and-braces for elements
-   that still mount. Do NOT hide <header> itself — it carries the sidebar
+   that still mount — including Streamlit Cloud's "Hosted with Streamlit"
+   footer/decoration. Do NOT hide <header> itself — it carries the sidebar
    expand button, and killing it traps the user with no navigation. */
 #MainMenu,
+footer,
 [data-testid="stMainMenu"],
 [data-testid="stMainMenuPopover"],
 [data-testid="stAppDeployButton"],
-[data-testid="stToolbarActions"] {
+[data-testid="stToolbarActions"],
+[data-testid="stDecoration"],
+[data-testid="stFooter"] {
   display: none !important;
 }
