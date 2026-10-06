@@ -4,8 +4,9 @@
 
 # GroundedAI
 
-### Citation-verified AI for your documents
+### Citation-verified RAG for your documents
 
+[![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented%20Generation-brightgreen)](#how-we-solve-it)
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
@@ -14,9 +15,9 @@
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
 
-**Ask your documents questions. Every sentence cites its source — enforced by schema validation, not prompts.**
+**Retrieval-Augmented Generation (RAG) for your documents. Ask questions — every sentence cites its source (page-level `[SOURCE N]`), enforced by schema validation, not prompts.**
 
-**[Try the live demo →](https://groundedai-app.streamlit.app/)**
+**[Try the live  →](https://groundedai-app.streamlit.app/)**
 
 <p align="center">
   <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
@@ -40,6 +41,8 @@ AI assistants answer questions about your documents — and then **guess**.
 ---
 
 ## How we solve it
+
+**Retrieval-Augmented Generation (RAG)** with a citation validation gate on top: retrieve only your document's passages, ground the answer on them, then reject any sentence that isn't cited.
 
 Upload a PDF → ask a question → get an answer where **every factual sentence carries a page-level `[SOURCE N]` citation**, validated by schema before the answer reaches you.
 
@@ -121,9 +124,9 @@ The core engine (hybrid retrieval + citation verification + workspace profiles) 
 
 ---
 
-## Technology
+## Technology — the RAG pipeline
 
-How each piece solves part of the problem:
+Hybrid Retrieval-Augmented Generation stack. How each piece solves part of the problem:
 
 | Layer | Technology | Problem it solves |
 |---|---|---|
