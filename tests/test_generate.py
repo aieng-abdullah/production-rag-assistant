@@ -275,7 +275,7 @@ class TestRunPipeline:
 
         trace = result.trace
         assert trace["workspace"] == "legal"
-        assert trace["prompt_version"] == "legal-v2"
+        assert trace["prompt_version"] == "legal-v3"
         assert trace["chunks"] == [
             {"source_id": 1, "doc_id": "d1", "page_num": 7, "cited": True}
         ]
@@ -299,6 +299,9 @@ class TestRunPipeline:
         assert result.verification["status"] == "verified"
         assert mock_llm.call_count == 2
         assert "rejected by the verifier" in mock_llm.call_args[0][0]
+        # Repair must not nudge the model to shrink the answer: rejected
+        # claims are fixed/dropped individually, the rest stay.
+        assert "keep the rest" in mock_llm.call_args[0][0]
 
     @patch("src.generation.chain.retrieval")
     @patch("src.generation.chain._invoke_llm")

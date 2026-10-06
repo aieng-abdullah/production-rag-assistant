@@ -155,9 +155,10 @@ def _generate_verified(
         )
         repair_prompt = (
             f"{prompt}\n\nYour previous claims were rejected by the verifier:\n"
-            f"{feedback}\nFix the claims to match the evidence, or abstain "
-            "entirely if they cannot be supported. Return the corrected JSON "
-            "object only."
+            f"{feedback}\nFix or drop only the rejected claims and keep the "
+            "rest — do not shrink the answer below everything the evidence "
+            "supports. Abstain only when no claim can be supported. Return "
+            "the corrected JSON object only."
         )
         logger.warning(f"Judge rejected claims, re-generating (attempt {attempts + 1}): {feedback}")
         structured, round_usage = _generate_structured(
