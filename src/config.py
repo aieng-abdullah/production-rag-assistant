@@ -97,6 +97,12 @@ class Config:
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
     LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    # Production: off by default. Set LANGFUSE_ENABLED=on to enable.
+    LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED", "off") == "on"
+    # Sample rate 0.0-1.0. 0.0 = disabled, 1.0 = all. Production default 0.0.
+    LANGFUSE_SAMPLE_RATE = float(os.getenv("LANGFUSE_SAMPLE_RATE", "0.0"))
+    # Debug mode: if on, includes full prompt/answer/chunk text in traces (dev only).
+    LANGFUSE_DEBUG = os.getenv("LANGFUSE_DEBUG", "off") == "on"
 
     # Stripe billing (PLAN PR-5) — routes register only when the secret key
     # is present; webhook additionally needs its signing secret.
