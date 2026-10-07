@@ -291,6 +291,26 @@ export default function Landing() {
             </article>
           </Reveal>
         </div>
+
+        <Reveal delay={120}>
+          <div className="about-sign">
+            <span className="about-sign-name">Abdullah Al Arif</span>
+            <span className="about-sign-role">Creator of GroundedAI</span>
+            <div className="about-links">
+              <a href="https://github.com/aieng-abdullah" target="_blank" rel="noreferrer">
+                GitHub
+              </a>
+              <a
+                href="https://www.linkedin.com/in/abdullah-al-arif-8b58542a7"
+                target="_blank"
+                rel="noreferrer"
+              >
+                LinkedIn
+              </a>
+              <a href="mailto:aieng.abdullah.arif@gmail.com">Email</a>
+            </div>
+          </div>
+        </Reveal>
       </section>
 
       <section className="section">

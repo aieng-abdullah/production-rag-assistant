@@ -1719,3 +1719,78 @@ h1, h2, h3 {
   color: var(--ink-1);
   font-style: normal;
 }
+
+/* --- about: signature + animated underline -------------------------------- */
+
+.about h2 { position: relative; }
+.about .reveal.is-visible h2::after {
+  content: "";
+  display: block;
+  width: 110px;
+  height: 3px;
+  margin: 0.7rem auto 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: center;
+  animation: draw-line 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s backwards;
+}
+@keyframes draw-line {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.about-grid .card {
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease;
+}
+.about-grid .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 22px 44px -30px rgba(30, 26, 20, 0.6);
+}
+.about-sign {
+  margin-top: 2.4rem;
+  padding-top: 1.7rem;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+.about-sign-name {
+  font-family: var(--serif);
+  font-size: clamp(1.3rem, 2.5vw, 1.6rem);
+  color: var(--ink-1);
+}
+.about-sign-role {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.about-links { display: flex; gap: 1.4rem; margin-top: 0.6rem; }
+.about-links a {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding-bottom: 4px;
+  transition: color 0.25s ease, transform 0.25s ease;
+}
+.about-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 1.5px;
+  background: var(--accent);
+  transition: width 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.about-links a:hover { color: var(--ink-1); transform: translateY(-2px); }
+.about-links a:hover::after { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .about .reveal.is-visible h2::after { animation: none; }
+}
