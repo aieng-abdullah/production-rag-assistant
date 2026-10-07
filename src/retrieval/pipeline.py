@@ -47,11 +47,17 @@ def retrieval(
                 obs.update(level="ERROR", status_message=str(e))
                 raise
 
-    # BM25 search
+    # BM25 search — None means the tenant has no chunks yet (get_bm25
+    # caches None for empty workspaces); an empty workspace must degrade
+    # to vector-only, not crash the whole query.
     try:
-        bm25_results = _traced_step(
-            "bm25-search",
-            lambda: bm25_search(bm25_index, query, top_k=20),
+        bm25_results = (
+            []
+            if bm25_index is None
+            else _traced_step(
+                "bm25-search",
+                lambda: bm25_search(bm25_index, query, top_k=20),
+            )
         )
         bm25_results = drop_boilerplate(bm25_results)
         logger.info(f"BM25 search returned {len(bm25_results)} results")

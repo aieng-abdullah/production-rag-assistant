@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+venv/
+__pycache__/
+*.pyc
+*.pyo
+data/
+docs/
+tests/
+eval/
+frontend/
+results.json
+*.log
+.DS_Store
+.claude/
+.opencode/
