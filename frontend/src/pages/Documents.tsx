@@ -32,6 +32,7 @@ export default function Documents() {
   const [docVersion, setDocVersion] = useState("");
   const [jurisdiction, setJurisdiction] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const pollTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -85,6 +86,18 @@ export default function Documents() {
       }
     }, delay);
     timers.set(id, timer);
+  }
+
+  function pickFile(candidate: File | null | undefined) {
+    if (!candidate) return;
+    const isPdf =
+      candidate.type === "application/pdf" ||
+      candidate.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      toast("Only PDF files can be indexed.", "error");
+      return;
+    }
+    setFile(candidate);
   }
 
   async function upload() {
@@ -152,18 +165,31 @@ export default function Documents() {
 
       <section className="card upload-card">
         <span className="demo-label">Upload</span>
-        <label className={`dropzone${file ? " has-file" : ""}`} htmlFor="pdf-input">
+        <label
+          className={`dropzone${file ? " has-file" : ""}${dragOver ? " is-dragover" : ""}`}
+          htmlFor="pdf-input"
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOver(false);
+            pickFile(event.dataTransfer.files?.[0]);
+          }}
+        >
           <input
             id="pdf-input"
             type="file"
             accept="application/pdf,.pdf"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => pickFile(event.target.files?.[0])}
           />
           {file ? (
             <span className="dropzone-file">{file.name}</span>
           ) : (
             <span className="dropzone-hint">
-              Drop a PDF here, or click to browse
+              {dragOver ? "Release to add the PDF" : "Drop a PDF here, or click to browse"}
               <em>Research papers, contracts, reports. Max 100 MB per plan.</em>
             </span>
           )}
