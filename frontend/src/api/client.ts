@@ -85,3 +85,42 @@ export async function api<T>(
   }
   return body as T;
 }
+
+
+/** Multipart upload (PDFs): never set Content-Type, the browser bounds it. */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch (error) {
+    throw new ApiError(
+      0,
+      error instanceof DOMException && error.name === "AbortError"
+        ? "Upload timed out (60s)."
+        : `Cannot reach the API at ${API_BASE}`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (response.status === 401) {
+    clearToken();
+    window.location.assign("/login");
+    throw new ApiError(401, "Session expired. Please sign in again.");
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      typeof body?.detail === "string" ? body.detail : response.statusText,
+    );
+  }
+  return body as T;
+}

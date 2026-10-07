@@ -30,6 +30,7 @@ function Nav() {
         <nav>
           <Link to="/">Product</Link>
           <Link className="nav-about" to="/#about">About</Link>
+          {user && <Link to="/chat">Chat</Link>}
           {user ? (
             <button
               className="btn btn-ghost nav-btn"
