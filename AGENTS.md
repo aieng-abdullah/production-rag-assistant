@@ -56,7 +56,7 @@ tests/                        # Pytest suite (backend)
 
 - **Python 3.12** required. `asyncio_mode = auto` in pytest.ini.
 - **GROQ_API_KEY** + **VOYAGE_API_KEY** + **JWT_SECRET** required. App crashes at startup without them.
-- **ChromaDB** stores vectors in `data/chroma/`. Data dirs are gitignored.
+- **Qdrant Cloud** stores vectors in the managed cluster. `QDRANT_URL` and `QDRANT_API_KEY` are required for retrieval.
 - **BM25 index** rebuilt in-memory from ChromaDB chunks on each API start or PDF upload. Not persisted separately.
 - **Cross-encoder reranker** (`voyage-rerank-3-lite`) runs via Voyage API. Accounts for major query latency.
 - **Citation validation** is Pydantic-enforced: every answer must contain `[SOURCE N]` patterns or it raises `ValidationError`.
@@ -116,7 +116,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
 
 ## Container Orchestration
 
-`docker-compose.yml` runs ChromaDB + FastAPI + (optional) Streamlit. App container reads `CHROMA_HOST=chromadb`. Locally, `CHROMA_MODE=local` uses persistent file storage.
+`docker-compose.yml` runs the FastAPI API against Qdrant Cloud. Secrets come from `.env`; free-tier disk is ephemeral.
 
 ## Operational Pitfalls
 

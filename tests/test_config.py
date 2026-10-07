@@ -11,22 +11,11 @@ class TestConfigPaths:
     def test_data_dir_exists(self):
         assert Config.DATA_DIR.exists()
 
-    def test_chroma_dir_is_under_data_dir(self):
-        assert Config.CHROMA_DIR.parent == Config.DATA_DIR
-
-    def test_chroma_dir_path_is_absolute(self):
-        assert Config.CHROMA_DIR.is_absolute()
 
 
 class TestConfigEnvVars:
     """Config reads env vars at import time. We verify the mechanism works by
     testing that class attributes reflect os.getenv defaults."""
-
-    def test_chroma_host_is_string(self):
-        assert isinstance(Config.CHROMA_HOST, str)
-
-    def test_chroma_port_is_int(self):
-        assert isinstance(Config.CHROMA_PORT, int)
 
     def test_log_level_has_default(self):
         assert Config.LOG_LEVEL in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
