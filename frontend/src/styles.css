@@ -1707,3 +1707,15 @@ h1, h2, h3 {
   border-radius: 8px;
   padding: 0.7rem;
 }
+
+.dropzone.is-dragover .dropzone-hint,
+.dropzone.is-dragover .dropzone-file {
+  border-color: var(--accent);
+  border-style: solid;
+  background: rgba(70, 101, 79, 0.1);
+  transform: scale(1.01);
+}
+.dropzone.is-dragover .dropzone-hint {
+  color: var(--ink-1);
+  font-style: normal;
+}
