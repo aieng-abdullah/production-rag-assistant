@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import TraceModal from "../components/TraceModal";
 import { useToast } from "../components/Toast";
-
-type Workspace = "legal" | "academic";
+import WorkspaceSwitch, { WS_ACCENT, type Workspace } from "../components/WorkspaceSwitch";
 
 interface Source {
   doc_id: string;
@@ -48,16 +47,24 @@ type Message =
 const WARM_ABSTAIN =
   "I couldn't find that in your documents, so I'd rather tell you than guess. Try rephrasing your question, or upload a document that covers it.";
 
+function recordHistory(query: string, status: string) {
+  try {
+    const raw = localStorage.getItem("gai_history");
+    const items: { q: string; status: string; ts: number }[] = raw
+      ? JSON.parse(raw)
+      : [];
+    items.unshift({ q: query, status, ts: Date.now() });
+    localStorage.setItem("gai_history", JSON.stringify(items.slice(0, 30)));
+  } catch {
+    /* private mode / quota: history is a nicety, never fatal */
+  }
+}
+
 const STARTERS = [
   "What are the main obligations of each party?",
   "Summarize the termination clause",
   "Which deadlines are mentioned in this document?",
 ];
-
-const WS_ACCENT: Record<Workspace, string> = {
-  legal: "#1e3a5f",
-  academic: "#0d9488",
-};
 
 function renderAnswer(text: string) {
   const parts = text.split(/(\[SOURCE \d+\])/g);
@@ -147,6 +154,7 @@ export default function Chat() {
         };
         return next;
       });
+      recordHistory(query, response.verification.status);
       void refreshUsage();
     } catch (error) {
       const message =
@@ -189,20 +197,7 @@ export default function Chat() {
   return (
     <main className="chat-page shell">
       <header className="chat-bar">
-        <div className="chat-ws" role="tablist" aria-label="Workspace">
-          {(["legal", "academic"] as Workspace[]).map((ws) => (
-            <button
-              key={ws}
-              role="tab"
-              aria-selected={workspace === ws}
-              className={`chat-ws-btn${workspace === ws ? " is-active" : ""}`}
-              style={workspace === ws ? { background: WS_ACCENT[ws] } : undefined}
-              onClick={() => setWorkspace(ws)}
-            >
-              {ws}
-            </button>
-          ))}
-        </div>
+        <WorkspaceSwitch value={workspace} onChange={setWorkspace} />
         <div className="chat-bar-right">
           {usage && (
             <span className="quota-pill" title={`${usage.tier} tier`}>

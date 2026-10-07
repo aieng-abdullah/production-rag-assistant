@@ -6,6 +6,8 @@ import ScrollToTop from "./components/ScrollToTop";
 import { ToastProvider } from "./components/Toast";
 import AuthCallback from "./pages/AuthCallback";
 import Chat from "./pages/Chat";
+import Dashboard from "./pages/Dashboard";
+import Documents from "./pages/Documents";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -31,6 +33,8 @@ function Nav() {
           <Link to="/">Product</Link>
           <Link className="nav-about" to="/#about">About</Link>
           {user && <Link to="/chat">Chat</Link>}
+          {user && <Link className="nav-wide" to="/documents">Documents</Link>}
+          {user && <Link className="nav-wide" to="/dashboard">Dashboard</Link>}
           {user ? (
             <button
               className="btn btn-ghost nav-btn"
@@ -69,6 +73,22 @@ export default function App() {
             element={
               <RequireAuth>
                 <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <RequireAuth>
+                <Documents />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <Dashboard />
               </RequireAuth>
             }
           />
