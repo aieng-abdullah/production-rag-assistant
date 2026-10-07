@@ -301,7 +301,7 @@ export default function Landing() {
                 GitHub
               </a>
               <a
-                href="https://www.linkedin.com/in/abdullah-al-arif-8b58542a7"
+                href="https://www.linkedin.com/in/aieng-abdullah"
                 target="_blank"
                 rel="noreferrer"
               >
