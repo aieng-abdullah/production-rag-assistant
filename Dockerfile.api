@@ -19,7 +19,7 @@ COPY alembic.ini .
 # uid 1000 matches the host user so the ./data bind mount stays writable
 # (SQLite app.db + raw uploads live there).
 RUN useradd --create-home --uid 1000 appuser \
-    && mkdir -p data/raw data/chroma data/processed \
+    && mkdir -p data/raw data/processed \
     && chown -R appuser:appuser /app
 USER appuser
 
