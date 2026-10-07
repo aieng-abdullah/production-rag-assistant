@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
+import { logger } from "../utils/logger";
 
 function GoogleIcon() {
   return (
@@ -24,11 +25,15 @@ export default function Login() {
   async function run(kind: "guest" | "demo", action: () => Promise<void>) {
     setBusy(kind);
     try {
+      logger.info("Login attempt", { kind });
       await action();
+      logger.info("Login succeeded", { kind });
       toast("Welcome in.", "success");
       navigate("/chat", { replace: true });
     } catch (exc) {
-      toast(exc instanceof ApiError ? exc.message : "Sign-in failed", "error");
+      logger.error("Login failed", { kind, error: String(exc) });
+      const msg = exc instanceof ApiError ? exc.message : "Sign-in failed";
+      toast(msg, "error");
     } finally {
       setBusy(null);
     }
@@ -49,7 +54,7 @@ export default function Login() {
       <div className="auth-card glass">
         <h2>Sign in to GroundedAI</h2>
 
-        <button className="btn auth-btn" onClick={googleLogin}>
+        <button type="button" className="btn auth-btn" onClick={() => { logger.info("Google login button clicked"); googleLogin(); }}>
           <GoogleIcon />
           Sign in with Google
         </button>

@@ -14,6 +14,7 @@ import {
   setToken,
   type LoginResponse,
 } from "../api/client";
+import { logger } from "../utils/logger";
 
 interface AuthUser {
   id: number;
@@ -69,20 +70,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const googleLogin = useCallback(() => {
-    window.location.assign(`${API_BASE}/auth/google`);
+    try {
+      const url = `${API_BASE}/auth/google`;
+      logger.info("Initiating Google OAuth", { url, apiBase: API_BASE });
+      window.location.assign(url);
+    } catch (err) {
+      logger.error("Google login failed", { error: String(err) });
+      alert("Failed to start Google sign-in: " + String(err));
+    }
   }, []);
 
   const guestLogin = useCallback(async () => {
-    login(
-      await api<LoginResponse>("/auth/anonymous", {
+    try {
+      logger.info("Guest login attempt");
+      const response = await api<LoginResponse>("/auth/anonymous", {
         method: "POST",
         body: JSON.stringify({ device_id: deviceId() }),
-      }),
-    );
+      });
+      login(response);
+      logger.info("Guest login succeeded");
+    } catch (err) {
+      logger.error("Guest login failed", { error: String(err) });
+      throw err;
+    }
   }, [login]);
 
   const demoLogin = useCallback(async () => {
-    login(await api<LoginResponse>("/auth/demo", { method: "POST" }));
+    try {
+      logger.info("Demo login attempt");
+      const response = await api<LoginResponse>("/auth/demo", { method: "POST" });
+      login(response);
+      logger.info("Demo login succeeded");
+    } catch (err) {
+      logger.error("Demo login failed", { error: String(err) });
+      throw err;
+    }
   }, [login]);
 
   const consumeFragmentToken = useCallback(() => {
@@ -96,8 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    clearToken();
-    setUser(null);
+    try {
+      logger.info("Logging out");
+      clearToken();
+      setUser(null);
+      logger.info("Logout complete");
+    } catch (err) {
+      logger.error("Logout error", { error: String(err) });
+    }
   }, []);
 
   const value = useMemo(
