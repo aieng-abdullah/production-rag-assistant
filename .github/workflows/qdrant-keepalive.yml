@@ -1,0 +1,15 @@
+name: Qdrant keep-alive
+
+on:
+  schedule:
+    - cron: "17 */24 * *"  # daily at 00:17 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Qdrant cluster
+        run: |
+          curl -fsSL -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
+            "${{ secrets.QDRANT_URL }}/collections" || true
