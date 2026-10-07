@@ -22,6 +22,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from src.config import Config
 from src.generation.providers import Provider, create_langchain_client
+from src.generation.sanitize import sanitize_untrusted
 from src.generation.schema import StructuredAnswer
 
 __all__ = [
@@ -53,21 +54,25 @@ Output ONLY one JSON object: {"verdict": "SUPPORTED" | "PARTIAL" | "UNSUPPORTED"
 
 
 def build_judge_prompt(claim_text: str, citations: list, chunks: list[dict]) -> str:
-    """One claim + its quoted evidence, isolated as data blocks."""
+    """One claim + its quoted evidence, isolated as data blocks.
+
+    Claim, quote and chunk text are sanitized first: control characters
+    and delimiter tags are stripped so untrusted text cannot close a
+    block early and escape its framing (prompt-injection defense)."""
     blocks = []
     for citation in citations:
         chunk = chunks[citation.source_id - 1]
         blocks.append(
             f"<source id=\"{citation.source_id}\">\n"
-            f"QUOTE: {citation.quote}\n"
-            f"FULL TEXT: {chunk.get('text', '')}\n"
+            f"QUOTE: {sanitize_untrusted(citation.quote)}\n"
+            f"FULL TEXT: {sanitize_untrusted(chunk.get('text', ''))}\n"
             "</source>"
         )
     evidence = "\n".join(blocks)
     return f"""{_JUDGE_RULES}
 
 <claim>
-{claim_text}
+{sanitize_untrusted(claim_text)}
 </claim>
 
 <evidence>

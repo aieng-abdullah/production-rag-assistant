@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from src.api.deps import quota_to_http, require_user
 from src.config import Config
 from src.db.database import session_scope
+from src.generation.sanitize import sanitize_untrusted
 from src.services import RAGService
 from src.services.bm25_cache import get_bm25
 from src.services.quotas import (
@@ -42,7 +43,18 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     """Tenant-scoped answer. 429 on exhausted daily quota; the quota slots
     (query + verify = 2 units) are reserved atomically BEFORE generation
     and refunded on failure. `workspace` picks the niche: prompt
-    profile + retrieval filter (PLAN PR-4)."""
+    profile + retrieval filter (PLAN PR-4).
+
+    The query is sanitized at the API boundary — before any quota is
+    reserved and before anything is persisted — so stored traces and the
+    prompt builder see the same delimiter-free, control-char-free text.
+    """
+    query = sanitize_untrusted(body.query)
+    if not query.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Query has no usable content",
+        )
     tenant = str(user_id)
     try:
         with session_scope() as session:
@@ -55,7 +67,7 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     try:
         cited = RAGService().generate_answer(
             tenant,
-            body.query,
+            query,
             bm25_index=get_bm25(tenant, body.workspace),
             workspace=body.workspace,
         )
@@ -78,7 +90,7 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     answer_id: int | None = None
     try:
         with session_scope() as session:
-            answer_id = persist_answer(session, user_id, body.query, cited)
+            answer_id = persist_answer(session, user_id, query, cited)
     except Exception as exc:
         # Provenance is non-critical — the answer ships with answer_id: null.
         logger.warning(f"Answer trace persist failed tenant={tenant}: {exc}")
