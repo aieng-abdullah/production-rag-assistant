@@ -1,6 +1,7 @@
 """Centralized configuration for RAG Research Assistant."""
 
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -76,6 +77,10 @@ class Config:
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
     # Guest tier: free try-out before the login wall.
     GUEST_QUERY_LIMIT = int(os.getenv("GUEST_QUERY_LIMIT", "3"))
+    # API guest tier (restored FastAPI layer — PLAN PR-6): ANON_* names kept
+    # because src/services/quotas and its tests pin them. Same defaults.
+    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "3"))
+    ANON_DOCUMENT_LIMIT = int(os.getenv("ANON_DOCUMENT_LIMIT", "1"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
@@ -103,6 +108,20 @@ class Config:
     # Google OAuth (PLAN PR-2b)
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback"
+    )
+    # Browser redirect target after the OAuth callback (SPA origin).
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # API auth (restored FastAPI layer): HS256 signing key — env-only,
+    # never logged, required once Google creds are set.
+    JWT_SECRET = os.getenv("JWT_SECRET", "")
+    JWT_TTL_DAYS = int(os.getenv("JWT_TTL_DAYS", "7"))
+    # Demo login (PR-6): "on" | "off" | "" = auto (on exactly when no
+    # Google creds — local clones get demo access, deployments with real
+    # auth do not). Explicit env always wins.
+    ENABLE_DEMO_LOGIN = os.getenv("ENABLE_DEMO_LOGIN", "")
 
     # Auth mode
     APP_AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
@@ -132,3 +151,15 @@ class Config:
                 "(PLAN-render-react Phase 1): ingestion and retrieval queries "
                 "will fail until it is set in .env"
             )
+
+
+# Demo flag resolution (PR-6): auto = demo on exactly when Google auth is absent.
+if Config.ENABLE_DEMO_LOGIN not in ("on", "off"):
+    Config.ENABLE_DEMO_LOGIN = "off" if Config.GOOGLE_CLIENT_ID else "on"
+
+# Local demo needs signable tokens without forcing every clone to invent a
+# secret: generate an in-memory one ONLY when no Google creds and no env
+# secret (dies with the process — tokens never survive restart, never logged).
+# Google creds without JWT_SECRET fail loudly at request time (src/api/deps).
+if not Config.JWT_SECRET and not Config.GOOGLE_CLIENT_ID:
+    Config.JWT_SECRET = secrets.token_urlsafe(32)

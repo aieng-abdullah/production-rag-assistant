@@ -8,7 +8,7 @@ from src.db.database import Base
 from src.db.models import Document, Subscription, User
 from src.services.quotas import (
     check_query_quota,
-    check_document_quota,
+    check_tier_document_quota,
     TIER_MULTIPLIERS,
     set_session_factory_override,
     clear_session_factory_override,
@@ -76,7 +76,7 @@ class TestQuotas:
 
     def test_check_document_quota_free(self, session):
         user = _create_user_with_sub(session, tier="free")
-        result = check_document_quota(user.id, "free")
+        result = check_tier_document_quota(user.id, "free")
         assert result.allowed is True
         assert result.limit == 5  # DOCUMENT_LIMIT * 1
         assert result.used == 0
@@ -84,7 +84,7 @@ class TestQuotas:
 
     def test_check_document_quota_pro(self, session):
         user = _create_user_with_sub(session, tier="pro")
-        result = check_document_quota(user.id, "pro")
+        result = check_tier_document_quota(user.id, "pro")
         assert result.allowed is True
         assert result.limit == 50  # DOCUMENT_LIMIT * 10
         assert result.used == 0
