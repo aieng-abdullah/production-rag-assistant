@@ -35,6 +35,22 @@ class TestRetrievalSuccess:
     @patch("src.retrieval.pipeline.rerank")
     @patch("src.retrieval.pipeline.vector_search")
     @patch("src.retrieval.pipeline.bm25_search")
+    def test_none_bm25_index_degrades_to_vector_only(self, mock_bm25, mock_vector, mock_rerank):
+        """get_bm25 caches None for empty workspaces — must not crash the query."""
+        mock_bm25.return_value = []
+        mock_vector.return_value = [{"chunk_id": "c3", "text": "c"}]
+        mock_rerank.return_value = [{"chunk_id": "c3", "text": "c", "rerank_score": 0.8}]
+
+        result = retrieval("query", None, top_k=5)
+
+        mock_bm25.assert_not_called()
+        mock_vector.assert_called_once()
+        mock_rerank.assert_called_once()
+        assert len(result) == 1
+
+    @patch("src.retrieval.pipeline.rerank")
+    @patch("src.retrieval.pipeline.vector_search")
+    @patch("src.retrieval.pipeline.bm25_search")
     def test_rrf_fusion_is_called_with_real_function(self, mock_bm25, mock_vector, mock_rerank):
         """Verify real rrf_fusion runs, not a mock."""
         bm25_chunks = [
