@@ -15,6 +15,7 @@ from src.api.answers import router as answers_router
 from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
 from src.api.documents import recover_stale_documents, router as documents_router
+from src.api.rate_limit import RateLimitMiddleware
 from src.api.usage import router as usage_router
 from src.config import Config
 
@@ -35,8 +36,12 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         lifespan=lifespan,
     )
-    # CORS: one static origin (the SPA on Render Static Site). Bearer-token
-    # auth → no cookies, so credentials stay off.
+    # Inner: rejects over-quota clients before routing. OPTIONS preflight is
+    # exempted inside the middleware so CORS negotiation never 429s.
+    app.add_middleware(RateLimitMiddleware)
+    # CORS outermost: 429/500 responses below still carry the headers the SPA
+    # needs to read their bodies. One static origin (Render Static Site).
+    # Bearer-token auth → no cookies, so credentials stay off.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[Config.FRONTEND_URL.rstrip("/")],
