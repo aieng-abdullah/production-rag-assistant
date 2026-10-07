@@ -81,11 +81,22 @@ class TestConfigConstraints:
     def test_collection_name_is_nonempty(self):
         assert len(Config.COLLECTION_NAME) > 0
 
-    def test_embedding_model_is_nonempty(self):
-        assert len(Config.EMBEDDING_MODEL) > 0
+    def test_voyage_embedding_model_is_nonempty(self):
+        assert len(Config.VOYAGE_EMBEDDING_MODEL) > 0
 
-    def test_reranker_model_is_nonempty(self):
-        assert len(Config.RERANKER_MODEL) > 0
+    def test_voyage_reranker_model_is_nonempty(self):
+        assert len(Config.VOYAGE_RERANKER_MODEL) > 0
+
+    def test_voyage_api_key_is_string(self):
+        # Optional at Config level — missing key warns at validate(), never crashes.
+        assert isinstance(Config.VOYAGE_API_KEY, str)
+
+    def test_voyage_timeouts_are_positive(self):
+        assert Config.RERANK_TIMEOUT_S > 0
+        assert Config.EMBED_TIMEOUT_S > 0
+
+    def test_voyage_embed_batch_size_is_positive(self):
+        assert Config.VOYAGE_EMBED_BATCH_SIZE > 0
 
 
 class TestQuotaConfig:

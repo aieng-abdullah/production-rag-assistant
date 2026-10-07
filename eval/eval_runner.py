@@ -13,9 +13,9 @@ from ragas.metrics._answer_relevance import AnswerRelevancy
 from ragas.metrics._context_precision import ContextPrecision
 from ragas.metrics._context_recall import ContextRecall
 from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
 
 from src.db.chroma_client import load_all_chunks
+from src.ingestion.embedder import _get_model as get_embedding_model
 from src.retrieval.bm25_index import build_bm25_index
 from src.generation.chain import generate
 from src.config import Config
@@ -31,7 +31,7 @@ THRESHOLDS = {
 }
 
 llm = LangchainLLMWrapper(ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL))
-embeddings = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL,model_kwargs={"device": "cpu"}))
+embeddings = LangchainEmbeddingsWrapper(get_embedding_model())
 
 _bm25_index = None
 

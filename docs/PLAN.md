@@ -14,8 +14,11 @@ One codebase, long-term commitment (2026→), all AI engineering skills applied.
 | Market          | Bangladesh-first, global/self-host friendly         |
 | Language        | English v1 → Bangla phase 2 (multilingual-e5 + OCR) |
 | Scope           | Multi-tenant, Google auth, free-tier quotas         |
-| Stack           | **Single Streamlit process** (direct service calls) |
-| Tenant isolation| Chroma metadata `tenant_id` filter                  |
+| Stack           | **FastAPI backend (Render Docker) + React SPA (Render Static Site)** — docs/PLAN-render-react.md |
+| Embeddings      | **Voyage `voyage-4-lite` (API-only, no local model)**     |
+| Reranker        | **Voyage `rerank-3-lite` (API-only, no local model)**     |
+| Frontend        | **React SPA** (Streamlit deleted after parity — Phase 6)  |
+| Tenant isolation| Vector-store metadata `tenant_id` filter                  |
 | Ingestion       | In-process + progress bar (blocking, v1)            |
 | Billing         | Stripe env-flagged only — never on critical path    |
 | Auth            | Session-state demo → Google OAuth (later, hosting)  |
@@ -170,6 +173,8 @@ Branch: `refactor/frontend-api-client`
 **Hope:** `grep "from src" app.py` = empty; UX feels same as before.
 
 ### PR-6.1 — Revert to single-process Streamlit (2026-10-05)
+**Superseded 2026-10-07 by docs/PLAN-render-react.md Phases 1/3/5 —
+API-only ML removed the "no free host runs API + ML" blocker.**
 Branch: `revert/streamlit-only`
 - [x] Pages call `src.services.RAGService` directly again (pre-PR-6 wiring)
 - [x] Delete `api_client.py`, `src/api/`, `src/services/quotas.py` and their

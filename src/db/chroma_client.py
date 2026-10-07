@@ -93,6 +93,10 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
     """
     Add or update chunks in the vectorstore using LangChain add_documents.
     Stamps `tenant_id` as the metadata partition key on every chunk.
+
+    Chunks carrying a precomputed `embedding` (the ingestion pipeline already
+    paid Voyage for it) go straight to the raw collection — otherwise LangChain
+    would re-embed every text, doubling API spend and rate-limit usage.
     """
     vectorstore = _get_vectorstore()
 
@@ -102,6 +106,8 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
     # `workspace` falls back to the configured default when absent.
     documents = []
     ids = []
+    embeddings = []
+    precomputed = bool(chunks) and all(chunk.get("embedding") for chunk in chunks)
     for chunk in chunks:
         doc = Document(
             page_content=chunk["text"],
@@ -116,6 +122,7 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
             }
         )
         documents.append(doc)
+        embeddings.append(chunk.get("embedding"))
         doc_id = chunk.get("doc_id", "unknown")
         chunk_index = chunk.get("chunk_index", len(ids))
         base_id = chunk.get("chunk_id", f"{doc_id}_chunk_{chunk_index}")
@@ -123,7 +130,15 @@ def upsert_chunks(chunks: List[Dict], tenant_id: str = DEFAULT_TENANT) -> int:
         # filename would collide without the partition prefix.
         ids.append(f"{tenant_id}::{base_id}")
 
-    vectorstore.add_documents(documents=documents, ids=ids)
+    if precomputed:
+        vectorstore._collection.upsert(
+            embeddings=embeddings,
+            documents=[doc.page_content for doc in documents],
+            metadatas=[doc.metadata for doc in documents],
+            ids=ids,
+        )
+    else:
+        vectorstore.add_documents(documents=documents, ids=ids)
     logger.info(f"Upserted {len(chunks)} chunks to vectorstore")
     return len(chunks)
 

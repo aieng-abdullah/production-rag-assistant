@@ -11,7 +11,7 @@ from src.retrieval.boilerplate import drop_boilerplate
 from src.retrieval.bm25_index import bm25_search
 from src.retrieval.chroma_search import vector_search
 from src.retrieval.hybrid_fusion import rrf_fusion
-from src.retrieval.cross_encoder import rerank
+from src.retrieval.reranker import rerank
 
 
 def retrieval(

@@ -392,3 +392,32 @@ def test_purge_tenant_empty_returns_zero(mock_embed, mock_chroma):
 
     assert removed == 0
     mock_collection.delete.assert_not_called()
+
+
+@patch("src.db.chroma_client.Chroma")
+@patch("src.db.chroma_client.get_embedding_model")
+def test_upsert_chunks_uses_precomputed_embeddings(mock_embed, mock_chroma):
+    mock_vs = MagicMock()
+    mock_collection = MagicMock()
+    mock_vs._collection = mock_collection
+    mock_chroma.return_value = mock_vs
+    mock_embed.return_value = MagicMock()
+
+    from src.db.chroma_client import upsert_chunks
+    chunks = [
+        {"text": "hello", "doc_id": "d1", "chunk_index": 0,
+         "chunk_id": "d1_c0", "embedding": [0.1, 0.2]},
+        {"text": "world", "doc_id": "d2", "chunk_index": 1,
+         "chunk_id": "d2_c1", "embedding": [0.3, 0.4]},
+    ]
+    count = upsert_chunks(chunks, tenant_id="t9")
+
+    assert count == 2
+    # Precomputed embeddings bypass LangChain re-embedding (Voyage spend).
+    mock_vs.add_documents.assert_not_called()
+    upsert_call = mock_collection.upsert.call_args
+    assert upsert_call.kwargs["embeddings"] == [[0.1, 0.2], [0.3, 0.4]]
+    assert upsert_call.kwargs["ids"] == ["t9::d1_c0", "t9::d2_c1"]
+    assert upsert_call.kwargs["documents"] == ["hello", "world"]
+    assert upsert_call.kwargs["metadatas"][0]["tenant_id"] == "t9"
+    assert "embedding" not in upsert_call.kwargs["metadatas"][0]

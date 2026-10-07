@@ -12,7 +12,7 @@ from loguru import logger
 from menu import menu_with_redirect
 from src.auth.dependencies import is_guest, get_current_tier
 from src.config import Config
-from src.services import RAGService, check_document_quota, record_ingest_usage, TIER_MULTIPLIERS
+from src.services import RAGService, check_tier_document_quota, record_ingest_usage, TIER_MULTIPLIERS
 from src.services.bm25_cache import invalidate
 from ui_core import (
     apply_workspace_accent,
@@ -63,7 +63,7 @@ def process_pdf(file_path: Path) -> None:
             return
         st.session_state.guest_docs += 1
     else:
-        quota = check_document_quota(int(tenant_id), tier)
+        quota = check_tier_document_quota(int(tenant_id), tier)
         if not quota.allowed:
             st.error(
                 f"Document limit reached ({quota.used}/{quota.limit}). "
@@ -121,7 +121,7 @@ def render_uploader() -> None:
     if is_guest():
         st.caption("Guest limit: 1 document")
     else:
-        quota = check_document_quota(int(tenant_id), tier)
+        quota = check_tier_document_quota(int(tenant_id), tier)
         st.caption(f"Documents: {quota.used}/{quota.limit} ({tier})")
         if quota.remaining == 0:
             st.warning("Document limit reached. Upgrade to Pro for more.")

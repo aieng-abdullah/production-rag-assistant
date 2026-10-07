@@ -1,6 +1,7 @@
 """Centralized configuration for RAG Research Assistant."""
 
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -33,11 +34,20 @@ class Config:
     # SQLite by default (local dev + tests); set DATABASE_URL to Postgres in prod.
     DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'data' / 'app.db'}")
 
-    # --- Embeddings ---
-    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-
-    # --- Reranker ---
-    RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # --- Voyage AI (embeddings + rerank, API-only — PLAN-render-react Phase 1) ---
+    # Optional at Config level: GROQ stays the only required key.
+    # Missing key degrades loudly (WARNING at validate()), never crashes boot.
+    VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY", "")
+    VOYAGE_BASE_URL = os.getenv("VOYAGE_BASE_URL", "https://api.voyageai.com/v1")
+    VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-4-lite")
+    VOYAGE_RERANKER_MODEL = os.getenv("VOYAGE_RERANKER_MODEL", "rerank-3-lite")
+    # Trial accounts (no payment method) are capped at 3 RPM / 10K TPM:
+    # 64 inputs ≈ 3K tokens → 3 paced batches/min stays inside both caps.
+    VOYAGE_EMBED_BATCH_SIZE = int(os.getenv("VOYAGE_EMBED_BATCH_SIZE", "64"))
+    # Minimum spacing between batched embedding calls during ingestion.
+    VOYAGE_EMBED_PACE_S = float(os.getenv("VOYAGE_EMBED_PACE_S", "21"))
+    EMBED_TIMEOUT_S = float(os.getenv("EMBED_TIMEOUT_S", "30"))
+    RERANK_TIMEOUT_S = float(os.getenv("RERANK_TIMEOUT_S", "10"))
 
     # --- Groq LLM (primary, free) ---
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -67,6 +77,10 @@ class Config:
     STORAGE_LIMIT_MB = int(os.getenv("STORAGE_LIMIT_MB", "100"))
     # Guest tier: free try-out before the login wall.
     GUEST_QUERY_LIMIT = int(os.getenv("GUEST_QUERY_LIMIT", "3"))
+    # API guest tier (restored FastAPI layer — PLAN PR-6): ANON_* names kept
+    # because src/services/quotas and its tests pin them. Same defaults.
+    ANON_QUERY_LIMIT = int(os.getenv("ANON_QUERY_LIMIT", "3"))
+    ANON_DOCUMENT_LIMIT = int(os.getenv("ANON_DOCUMENT_LIMIT", "1"))
 
     # --- Workspaces (PLAN PR-4): two niches, one engine ---
     WORKSPACES = ("legal", "academic")
@@ -94,6 +108,20 @@ class Config:
     # Google OAuth (PLAN PR-2b)
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback"
+    )
+    # Browser redirect target after the OAuth callback (SPA origin).
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # API auth (restored FastAPI layer): HS256 signing key — env-only,
+    # never logged, required once Google creds are set.
+    JWT_SECRET = os.getenv("JWT_SECRET", "")
+    JWT_TTL_DAYS = int(os.getenv("JWT_TTL_DAYS", "7"))
+    # Demo login (PR-6): "on" | "off" | "" = auto (on exactly when no
+    # Google creds — local clones get demo access, deployments with real
+    # auth do not). Explicit env always wins.
+    ENABLE_DEMO_LOGIN = os.getenv("ENABLE_DEMO_LOGIN", "")
 
     # Auth mode
     APP_AUTH_ENABLED = os.getenv("APP_AUTH", "off") == "on"
@@ -115,22 +143,23 @@ class Config:
                 "Set at least one of GROQ_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in .env,\n"
                 "or add one via the sidebar in the app."
             )
+        if not cls.VOYAGE_API_KEY:
+            from loguru import logger
+
+            logger.warning(
+                "VOYAGE_API_KEY missing — embeddings and rerank are API-only "
+                "(PLAN-render-react Phase 1): ingestion and retrieval queries "
+                "will fail until it is set in .env"
+            )
 
 
-def _hf_models_cached() -> bool:
-    """Both RAG models already on disk (no download needed)?"""
-    hub = Path(
-        os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
-    ) / "hub"
-    repos = (Config.EMBEDDING_MODEL, Config.RERANKER_MODEL)
-    return all(
-        (hub / f"models--{repo.replace('/', '--')}").exists() for repo in repos
-    )
+# Demo flag resolution (PR-6): auto = demo on exactly when Google auth is absent.
+if Config.ENABLE_DEMO_LOGIN not in ("on", "off"):
+    Config.ENABLE_DEMO_LOGIN = "off" if Config.GOOGLE_CLIENT_ID else "on"
 
-
-# Must run before `huggingface_hub` imports (it reads this env at import time) —
-# every heavy module imports src.config first. Saves the ~5s hub roundtrip on
-# each model init. Only when both models are cached: first run still downloads.
-# Explicit user setting (e.g. HF_HUB_OFFLINE=0) always wins (setdefault).
-if _hf_models_cached():
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+# Local demo needs signable tokens without forcing every clone to invent a
+# secret: generate an in-memory one ONLY when no Google creds and no env
+# secret (dies with the process — tokens never survive restart, never logged).
+# Google creds without JWT_SECRET fail loudly at request time (src/api/deps).
+if not Config.JWT_SECRET and not Config.GOOGLE_CLIENT_ID:
+    Config.JWT_SECRET = secrets.token_urlsafe(32)

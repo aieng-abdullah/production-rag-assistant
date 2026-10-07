@@ -12,9 +12,16 @@ groq>=0.9.0
 langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-groq>=0.2.0
-langchain-huggingface>=0.1.0
 langchain-text-splitters>=0.3.0
-sentence-transformers>=3.3.0
+
+# HTTP (Voyage embeddings + rerank APIs, Google OAuth)
+httpx>=0.27.0
+
+# API (restored FastAPI layer — PLAN-render-react Phase 3)
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pyjwt>=2.8.0
+stripe>=10.0.0  # billing routes register only when STRIPE_SECRET_KEY is set
 
 # Evaluation
 ragas>=0.1.0
