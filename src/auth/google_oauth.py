@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from src.config import Config
 from src.db.database import get_session_factory
 from src.db.models import Subscription, User
-from src.db.chroma_client import reassign_tenant
+from src.db.qdrant_client import reassign_tenant
 
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"

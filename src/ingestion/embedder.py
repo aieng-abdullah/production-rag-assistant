@@ -4,10 +4,10 @@ Replaces ``HuggingFaceEmbeddings`` (PLAN-render-react Phase 1) — torch and
 the ~90MB model download leave the container; embeddings are API-only.
 
 ``VoyageAIEmbeddings`` implements LangChain's ``Embeddings`` interface so
-``src/db/chroma_client.py`` keeps passing it straight to
+``src/db/qdrant_client.py`` keeps passing it straight to
 ``Chroma(embedding_function=…)``. Module functions ``embed_query`` /
 ``embed_chunks`` keep their names and signatures — every consumer
-(``chroma_search``, ingestion pipeline, eval) stays untouched.
+(``qdrant_search``, ingestion pipeline, eval) stays untouched.
 
 Vectors are L2-normalized, matching the old local embedder
 (``normalize_embeddings=True``): dot product == cosine similarity.

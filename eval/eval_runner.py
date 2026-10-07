@@ -14,7 +14,7 @@ from ragas.metrics._context_precision import ContextPrecision
 from ragas.metrics._context_recall import ContextRecall
 from langchain_groq import ChatGroq
 
-from src.db.chroma_client import load_all_chunks
+from src.db.qdrant_client import load_all_chunks
 from src.ingestion.embedder import _get_model as get_embedding_model
 from src.retrieval.bm25_index import build_bm25_index
 from src.generation.chain import generate

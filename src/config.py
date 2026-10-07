@@ -25,10 +25,16 @@ class Config:
     DATA_DIR = BASE_DIR / "data"
     CHROMA_DIR = DATA_DIR / "chroma"
 
-    # --- ChromaDB ---
+    # --- Qdrant ---
     CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
     COLLECTION_NAME = "research_docs"
+
+    # --- Qdrant Cloud (vector store — Phase 2) ---
+    # Cloud: full URL, e.g. https://xxx.cloud.qdrant.io:6333
+    # Local tests/demo: ":memory:" or a filesystem path for local persistence.
+    QDRANT_URL = os.getenv("QDRANT_URL", "")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
     # --- Relational DB (users, auth, quotas — PLAN PR-2a) ---
     # SQLite by default (local dev + tests); set DATABASE_URL to Postgres in prod.

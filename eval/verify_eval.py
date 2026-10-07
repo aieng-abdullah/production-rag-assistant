@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import load_all_chunks
+from src.db.qdrant_client import load_all_chunks
 from src.generation.chain import generate
 from src.retrieval.bm25_index import build_bm25_index
 

@@ -312,9 +312,9 @@ def demo_api(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(Config, "ENABLE_DEMO_LOGIN", "on")
     # Chroma is out of scope for auth tests — keep the suite fast/hermetic.
-    monkeypatch.setattr("src.db.chroma_client.has_chunks", lambda tenant: False)
+    monkeypatch.setattr("src.db.qdrant_client.has_chunks", lambda tenant: False)
     monkeypatch.setattr(
-        "src.db.chroma_client.reassign_tenant", lambda old, new: 0
+        "src.db.qdrant_client.reassign_tenant", lambda old, new: 0
     )
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -377,10 +377,10 @@ def test_demo_adopts_legacy_default_tenant(tmp_path, monkeypatch):
         Config, "JWT_SECRET", "test-secret-0123456789abcdef0123456789abcdef"
     )
     monkeypatch.setattr(Config, "ENABLE_DEMO_LOGIN", "on")
-    monkeypatch.setattr("src.db.chroma_client.has_chunks", lambda tenant: False)
+    monkeypatch.setattr("src.db.qdrant_client.has_chunks", lambda tenant: False)
     moved: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        "src.db.chroma_client.reassign_tenant", lambda old, new: moved.append((old, new)) or 5
+        "src.db.qdrant_client.reassign_tenant", lambda old, new: moved.append((old, new)) or 5
     )
     reset_engine()
     Base.metadata.create_all(get_engine())

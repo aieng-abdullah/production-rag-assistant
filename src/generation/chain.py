@@ -35,7 +35,7 @@ from src.generation.providers import (
     create_langchain_client,
 )
 from src.config import Config
-from src.db.chroma_client import DEFAULT_TENANT, count_chunks
+from src.db.qdrant_client import DEFAULT_TENANT, count_chunks
 from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client, langfuse_enabled, should_trace_request, langfuse_debug, _redact_for_debug
 
 
