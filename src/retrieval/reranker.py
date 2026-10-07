@@ -28,9 +28,11 @@ from src.config import Config
 from src.voyage_usage import record as record_usage
 
 
+# Voyage trial accounts (no payment method): 3 RPM. Waits below outlast one
+# rate-limit window (20s) without hammering the API.
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=2, min=5, max=45),
     retry=retry_if_exception_type(httpx.HTTPError),
     before=before_log(logger, logging.WARNING),
     reraise=True,
@@ -38,8 +40,9 @@ from src.voyage_usage import record as record_usage
 def _post_rerank(query: str, documents: list[str]) -> list[dict]:
     """POST ``/rerank`` with retry + exponential backoff.
 
-    Retries transport errors, timeouts and 429/5xx. Client errors
-    (bad key, bad model) raise immediately — retrying cannot fix them.
+    Retries transport errors, timeouts and 429/5xx (waits outlast the trial
+    3-RPM window). Client errors (bad key, bad model) raise immediately —
+    retrying cannot fix them.
     """
     if not Config.VOYAGE_API_KEY:
         raise EnvironmentError(
@@ -69,7 +72,8 @@ def _post_rerank(query: str, documents: list[str]) -> list[dict]:
     data = response.json()
     usage = data.get("usage") or {}
     record_usage("rerank", int(usage.get("total_tokens") or 0))
-    return data.get("results") or []
+    # Voyage /rerank responds with `data` ([{"index", "relevance_score"}]).
+    return data.get("data") or []
 
 
 def rerank(

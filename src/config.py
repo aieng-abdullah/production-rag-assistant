@@ -40,8 +40,11 @@ class Config:
     VOYAGE_BASE_URL = os.getenv("VOYAGE_BASE_URL", "https://api.voyageai.com/v1")
     VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-4-lite")
     VOYAGE_RERANKER_MODEL = os.getenv("VOYAGE_RERANKER_MODEL", "rerank-3-lite")
-    # Voyage max inputs per /embeddings call (batching in embed_chunks).
-    VOYAGE_EMBED_BATCH_SIZE = int(os.getenv("VOYAGE_EMBED_BATCH_SIZE", "128"))
+    # Trial accounts (no payment method) are capped at 3 RPM / 10K TPM:
+    # 64 inputs ≈ 3K tokens → 3 paced batches/min stays inside both caps.
+    VOYAGE_EMBED_BATCH_SIZE = int(os.getenv("VOYAGE_EMBED_BATCH_SIZE", "64"))
+    # Minimum spacing between batched embedding calls during ingestion.
+    VOYAGE_EMBED_PACE_S = float(os.getenv("VOYAGE_EMBED_PACE_S", "21"))
     EMBED_TIMEOUT_S = float(os.getenv("EMBED_TIMEOUT_S", "30"))
     RERANK_TIMEOUT_S = float(os.getenv("RERANK_TIMEOUT_S", "10"))
 

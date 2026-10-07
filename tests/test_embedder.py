@@ -5,8 +5,15 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from src.config import Config
 from src.ingestion import embedder
 from src.ingestion.embedder import _get_model, embed_chunks, embed_query
+
+
+@pytest.fixture(autouse=True)
+def no_pacing(monkeypatch):
+    """Zero out ingestion pacing so multi-batch tests stay fast."""
+    monkeypatch.setattr(Config, "VOYAGE_EMBED_PACE_S", 0)
 
 
 def _response(vectors: list[list[float]], input_type: str | None = None) -> MagicMock:
@@ -63,8 +70,6 @@ def test_embed_query(mock_post):
 
 @patch("src.ingestion.embedder.httpx.post")
 def test_embed_chunks_batches_and_preserves_metadata(mock_post):
-    from src.config import Config
-
     mock_post.side_effect = _echo_vectors([0.6, 0.8], [1.0, 0.0])
     chunks = [
         {"text": "First test chunk about AI technology.", "doc_id": "doc1", "chunk_id": "c1"},
@@ -143,7 +148,21 @@ def test_embed_transport_error_retries_then_propagates(mock_post, fast_retry):
 
     with pytest.raises(httpx.HTTPError):
         embed_query("x")
-    assert mock_post.call_count == 3  # initial attempt + 2 retries
+    assert mock_post.call_count == 4  # initial attempt + 3 retries
+
+
+@patch("src.ingestion.embedder.time.sleep")
+@patch("src.ingestion.embedder.httpx.post")
+def test_embed_chunks_paces_batch_calls(mock_post, mock_sleep, monkeypatch):
+    """Trial 3-RPM cap: batched calls are spaced by VOYAGE_EMBED_PACE_S."""
+    monkeypatch.setattr(Config, "VOYAGE_EMBED_PACE_S", 21)
+    mock_post.side_effect = _echo_vectors([1.0, 0.0])
+
+    embed_chunks([{"text": "a"}, {"text": "b"}, {"text": "c"}], batch_size=2)
+
+    assert mock_post.call_count == 2
+    mock_sleep.assert_called_once()  # pause before the 2nd batch only
+    assert 0 < mock_sleep.call_args.args[0] <= 21
 
 
 @patch("src.ingestion.embedder.Config")

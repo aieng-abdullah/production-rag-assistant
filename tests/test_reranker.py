@@ -22,7 +22,7 @@ def _response(payload: dict, status_code: int = 200) -> MagicMock:
 def _results(*pairs: tuple[int, float]) -> dict:
     """Voyage /rerank payload from (index, relevance_score) pairs."""
     return {
-        "results": [
+        "data": [
             {"index": index, "relevance_score": score} for index, score in pairs
         ],
         "usage": {"total_tokens": 42},
@@ -110,7 +110,7 @@ def test_rerank_transport_error_retries_then_propagates(mock_post, fast_retry):
 
     with pytest.raises(httpx.HTTPError):
         rerank("query", [{"text": "x"}], top_k=1)
-    assert mock_post.call_count == 3  # initial attempt + 2 retries
+    assert mock_post.call_count == 4  # initial attempt + 3 retries
 
 
 @patch("src.retrieval.reranker.Config")
@@ -128,7 +128,7 @@ def test_rerank_missing_key_raises(mock_config):
 def test_rerank_skips_malformed_results(mock_post):
     mock_post.return_value = _response(
         {
-            "results": [
+            "data": [
                 {"index": 1, "relevance_score": 0.8},
                 {"index": 99, "relevance_score": 0.7},  # out of range
                 "not-a-dict",  # malformed

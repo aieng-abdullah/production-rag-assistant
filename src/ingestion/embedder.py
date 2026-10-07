@@ -14,6 +14,7 @@ Vectors are L2-normalized, matching the old local embedder
 """
 
 import logging
+import time
 from threading import Lock
 from typing import Dict, List
 
@@ -32,6 +33,16 @@ from tenacity import (
 from src.config import Config
 from src.voyage_usage import record as record_usage
 
+# Voyage trial accounts (no payment method): 3 RPM / 10K TPM. Waits below
+# outlast one rate-limit window (20s) without hammering the API.
+_RETRY_POLICY = dict(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=2, min=5, max=45),
+    retry=retry_if_exception_type(httpx.HTTPError),
+    before=before_log(logger, logging.WARNING),
+    reraise=True,
+)
+
 
 def _normalize(vector: List[float]) -> List[float]:
     """L2-normalize one embedding (parity with the local model's output)."""
@@ -43,19 +54,14 @@ def _normalize(vector: List[float]) -> List[float]:
     return (arr / norm).tolist()
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(httpx.HTTPError),
-    before=before_log(logger, logging.WARNING),
-    reraise=True,
-)
+@retry(**_RETRY_POLICY)
 def _post_embeddings(texts: List[str], input_type: str) -> List[List[float]]:
     """POST ``/embeddings`` with retry + exponential backoff.
 
-    Retries transport errors, timeouts and 429/5xx; client errors (bad key,
-    bad model) raise immediately. ``input_type`` is ``"query"`` or
-    ``"document"`` — Voyage optimizes the embedding space per side.
+    Retries transport errors, timeouts, 429 and 5xx (waits outlast the
+    trial 3-RPM window); client errors (bad key, bad model) raise
+    immediately. ``input_type`` is ``"query"`` or ``"document"`` — Voyage
+    optimizes the embedding space per side.
     """
     if not Config.VOYAGE_API_KEY:
         raise EnvironmentError(
@@ -159,7 +165,15 @@ def embed_chunks(chunks: List[Dict], batch_size: int | None = None) -> List[Dict
 
     logger.debug(f"Embedding {len(texts)} chunks (batch_size: {size})")
     vectors: List[List[float]] = []
+    pace_s = Config.VOYAGE_EMBED_PACE_S
+    last_call = 0.0
     for start in range(0, len(texts), size):
+        if start and pace_s:
+            # Trial cap is 3 RPM — space batch calls instead of eating 429s.
+            elapsed = time.monotonic() - last_call
+            if elapsed < pace_s:
+                time.sleep(pace_s - elapsed)
+        last_call = time.monotonic()
         vectors.extend(_post_embeddings(texts[start : start + size], input_type="document"))
 
     for chunk, embedding in zip(chunks, vectors):
