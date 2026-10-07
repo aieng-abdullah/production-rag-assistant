@@ -9,7 +9,7 @@ workspace of that tenant. TTL bounds staleness on missed invalidations.
 from cachetools import TTLCache
 from loguru import logger
 
-from src.db.chroma_client import load_all_chunks
+from src.db.qdrant_client import load_all_chunks
 from src.retrieval.bm25_index import build_bm25_index
 
 __all__ = ["get_bm25", "invalidate", "clear_all"]

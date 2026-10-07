@@ -35,13 +35,14 @@ class FakeEmbeddings(Embeddings):
 @pytest.fixture
 def tenant_store(monkeypatch, tmp_path):
     """Real Chroma persistent store isolated to tmp_path; fake embeddings."""
-    import src.db.chroma_client as mod
+    import src.db.qdrant_client as mod
     from src.config import Config
 
-    monkeypatch.setattr(Config, "CHROMA_DIR", tmp_path / "chroma")
+    monkeypatch.setattr(Config, "QDRANT_URL", str(tmp_path / "qdrant"))
+    monkeypatch.setattr(Config, "QDRANT_API_KEY", "")
     monkeypatch.setattr(mod, "get_embedding_model", lambda: FakeEmbeddings())
     monkeypatch.setattr(
-        "src.retrieval.chroma_search.embed_query", FakeEmbeddings().embed_query
+        "src.retrieval.qdrant_search.embed_query", FakeEmbeddings().embed_query
     )
     mod.reset_client()
     yield mod
@@ -91,7 +92,7 @@ class TestTenantIsolation:
     def test_vector_search_returns_empty_for_foreign_tenant(self, tenant_store):
         tenant_store.upsert_chunks(_chunks("a-doc"), tenant_id="tenant-a")
 
-        from src.retrieval.chroma_search import vector_search
+        from src.retrieval.qdrant_search import vector_search
 
         assert vector_search("content of a-doc", top_k=5, tenant_id="tenant-b") == []
         hits = vector_search("content of a-doc", top_k=5, tenant_id="tenant-a")
@@ -149,12 +150,13 @@ class TestLegacyBackfill:
     ):
         """Pre-PR-1 chunks (no tenant_id) must land in DEFAULT_TENANT, not vanish."""
         fake = FakeEmbeddings()
-        collection = tenant_store.get_collection()
-        collection.add(
-            ids=["legacy_0"],
-            documents=["legacy text"],
-            embeddings=[fake.embed_query("legacy text")],
-            metadatas=[{"doc_id": "legacy.pdf", "chunk_index": 0}],
+        store = tenant_store.get_collection()
+        store._ensure_collection(DIM)
+        import uuid
+        from qdrant_client.http.models import PointStruct
+        store.client.upsert(
+            collection_name=store.collection_name,
+            points=[PointStruct(id=str(uuid.uuid4()), vector=fake.embed_query("legacy text"), payload={"text": "legacy text", "doc_id": "legacy.pdf", "chunk_index": 0})],
         )
         assert tenant_store.load_all_chunks("tenant-a") == []  # not silently absorbed
 

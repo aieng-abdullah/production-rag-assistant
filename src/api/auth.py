@@ -173,7 +173,7 @@ def demo_login() -> dict:
             detail="JWT_SECRET is not set",
         )
 
-    from src.db.chroma_client import (  # lazy: keeps API boot off torch
+    from src.db.qdrant_client import (  # lazy: keeps API boot off torch
         DEFAULT_TENANT,
         has_chunks,
         reassign_tenant,

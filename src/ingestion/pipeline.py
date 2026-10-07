@@ -9,7 +9,7 @@ from pathlib import Path
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import DEFAULT_TENANT, upsert_chunks
+from src.db.qdrant_client import DEFAULT_TENANT, upsert_chunks
 from src.ingestion.chunker import chunk_pages
 from src.ingestion.embedder import embed_chunks
 from src.ingestion.parser import extract_pages

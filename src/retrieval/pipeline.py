@@ -6,10 +6,10 @@ pipeline.py:
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import DEFAULT_TENANT
+from src.db.qdrant_client import DEFAULT_TENANT
 from src.retrieval.boilerplate import drop_boilerplate
 from src.retrieval.bm25_index import bm25_search
-from src.retrieval.chroma_search import vector_search
+from src.retrieval.qdrant_search import vector_search
 from src.retrieval.hybrid_fusion import rrf_fusion
 from src.retrieval.reranker import rerank
 

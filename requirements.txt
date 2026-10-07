@@ -2,9 +2,7 @@
 streamlit>=1.58.0
 
 # Vector DB & Search
-chromadb>=0.5.0
 langchain-community>=0.3.0
-langchain-chroma>=0.1.0
 rank-bm25>=0.2.2  # Required by LangChain BM25
 
 # LLM & Embeddings
@@ -56,3 +54,5 @@ tenacity>=8.2.0
 # Utilities
 datasets>=3.0.0  # Required by ragas
 numpy>=1.26.0
+qdrant-client>=1.11.0
+langchain-qdrant>=0.7.0

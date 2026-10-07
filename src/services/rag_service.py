@@ -13,7 +13,7 @@ import shutil
 from loguru import logger
 
 from src.config import Config
-from src.db.chroma_client import DEFAULT_TENANT, get_collection, purge_tenant
+from src.db.qdrant_client import DEFAULT_TENANT, get_collection, purge_tenant
 from src.generation.Citation_system import CitedAnswer
 from src.generation.chain import generate
 from src.generation.profiles import get_prompt_version
