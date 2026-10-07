@@ -12,7 +12,8 @@
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-latest-green)](https://langchain.com)
-[![Streamlit](https://img.shields.io/badge/Streamlit-live-red?logo=streamlit)](https://groundedai-app.streamlit.app/)
+[![React](https://img.shields.io/badge/React-SPA-blue?logo=react)](https://github.com/aieng-abdullah/production-rag-assistant)
+[![FastAPI](https://img.shields.io/badge/FastAPI-backend-green?logo=fastapi)](https://github.com/aieng-abdullah/production-rag-assistant)
 [![Groq](https://img.shields.io/badge/LLM-Groq%20%7C%20Anthropic%20%7C%20OpenAI-orange)](https://groq.com)
 [![Langfuse](https://img.shields.io/badge/Observability-Langfuse-purple)](https://langfuse.com)
 [![Ragas](https://img.shields.io/badge/Evaluated-Ragas-blue)](https://ragas.io)
@@ -21,7 +22,7 @@
 
 **Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
 
-**[Try IT  →]( https://groundedai-frontend.onrender.com)**
+**[Try the live →](https://groundedai-frontend.onrender.com)**
 
 <p align="center">
   <img width="1884" height="911" alt="liveground" src="https://github.com/user-attachments/assets/773d9feb-4840-429c-87d4-5be7569efbd4" />
@@ -73,7 +74,7 @@ Validation is a **code-level gate**, not a prompt instruction. The model cannot 
 | **Choice of models** | Groq (free) → Anthropic → OpenAI failover; add your own key in the sidebar |
 | **Privacy** | Multi-tenant isolation (your docs invisible to others) or self-host entirely |
 | **Free to start** | Live demo free; no card required |
-| **Yours to run** | Open source core — `streamlit run app.py` in 5 minutes |
+| **Yours to run** | Open source core — FastAPI + React + Qdrant Cloud in one deploy |
 
 ### What makes this different from another RAG demo
 
@@ -123,7 +124,7 @@ The core engine (hybrid retrieval + citation verification + workspace profiles) 
 - **Provider failover** — Groq → Anthropic → OpenAI with exponential backoff
 - **Provenance traces** — queries, chunks, and verification stored with each answer
 - **Observability** — Langfuse traces on retrieval, prompt build, LLM call, validation
-- **Multi-tenant isolation** — Chroma metadata `tenant_id` filter on every read path
+- **Multi-tenant isolation** — Qdrant payload `tenant_id` filter on every read path
 - **Self-host ready** — local mode or Docker Compose; your data stays yours
 
 ---
@@ -136,16 +137,16 @@ Hybrid Retrieval-Augmented Generation stack. How each piece solves part of the p
 |---|---|---|
 | PDF parsing | **PyMuPDF** | Page-aware extraction → real page numbers in citations |
 | Chunking | **LangChain RecursiveCharacterTextSplitter** | 256-char chunks, 100 overlap → tight context, less noise to fabricate from |
-| Embeddings | **all-MiniLM-L6-v2** | Semantic search that survives reworded queries |
-| Vector store | **ChromaDB** | Fast similarity search + `tenant_id` isolation |
+| Embeddings | **Voyage AI `voyage-4-lite`** | API-only semantic search; Render-safe |
+| Vector store | **Qdrant Cloud** | Managed similarity search + payload filters for tenant/workspace isolation |
 | Sparse retrieval | **BM25** | Exact keyword match for terms like "scaled dot-product attention" |
 | Fusion | **Reciprocal Rank Fusion** | Combines keyword + semantic rankings without score normalization |
-| Reranker | **ms-marco-MiniLM-L-6-v2** | Cross-encoder precision on top candidates only |
+| Reranker | **Voyage AI `voyage-rerank-3-lite`** | API-only cross-encoder reranking |
 | LLM | **Groq / Anthropic / OpenAI** | Fast default (free Groq), user choice, failover on rate limits |
 | Orchestration | **LangChain** | Provider-agnostic chains, retries, structured output |
 | Validation | **Pydantic** | Hard gate: uncited sentence → rejected response |
-| UI | **Streamlit** | Single-process app; upload → chat → dashboard in one deploy |
-| Observability | **Langfuse** | Latency forensics — found reranker, not LLM, is the bottleneck |
+| UI | **React SPA + FastAPI** | Modern frontend, scoped API, Render Docker + static deploy |
+| Observability | **Langfuse (opt-in/sampled)** | Production-safe tracing; off by default, sampled when enabled |
 | Evaluation | **Ragas** | Faithfulness/relevancy gates on a golden set |
 | CI | **GitHub Actions** | Lint + 291 tests on every PR |
 
@@ -158,9 +159,9 @@ PyMuPDF Parser — page-aware extraction
     ↓
 RecursiveCharacterTextSplitter — 256 character chunks, 100 overlap
     ↓
-sentence-transformers/all-MiniLM-L6-v2 embeddings
+Voyage AI `voyage-4-lite` embeddings
     ↓
-ChromaDB — cosine similarity vector store (tenant-isolated)
+Qdrant Cloud — managed vector store (tenant-isolated via payload filters)
     ↓
 User Query
      ├── BM25 Search (Top 20)
@@ -168,7 +169,7 @@ User Query
      ↓
 Reciprocal Rank Fusion (score = 1 / (k + rank), k=60)
      ↓
-Cross-Encoder Reranker — ms-marco-MiniLM-L-6-v2
+Voyage AI `voyage-rerank-3-lite` reranker
      ↓
 Top 5 Chunks → Citation Prompt Builder (workspace profile)
      ↓
@@ -191,9 +192,9 @@ Matches the in-app pricing modal:
 |  | **Free** (live) | **Pro** (coming soon) |
 |--|---|---|
 | Price | $0 | $9 / mo |
-| Daily queries | 500 | 5,000 |
-| Workspaces | 1 | 3 |
-| Documents | 5 | 100 |
+| Verified answers/day | 10 | 100 |
+| Documents | 5 | 50 |
+| Storage | 100 MB | 1 GB |
 | Support | Community | Priority |
 
 Teams ($29/mo, admin + SSO) planned with billing activation (Stripe; Bangladesh-local rails alongside).
@@ -212,7 +213,7 @@ Teams ($29/mo, admin + SSO) planned with billing activation (Stripe; Bangladesh-
 | **bKash payments** | Planned | Bangladesh-local payment rail alongside Stripe |
 | **Teams / orgs** | Planned | Shared workspaces, admin controls, SSO |
 | **SSE streaming** | Planned | Token-by-token answer streaming with citation markers |
-| **SPA frontend** | Planned | React/Vue SPA replacing Streamlit for production UX |
+| **SPA frontend** | Done | React/Vite SPA replaces Streamlit for production UX |
 
 The engine stays shared; only prompt profiles, chunk metadata schemas, and citation formats change per domain (Legal / Academic / **Medical** / Bangla).
 
@@ -374,7 +375,7 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 | Eval gate not wired into CI | Open | Run Ragas in `eval.yml`; block merge on threshold breach |
 | Golden set n=5 | Open | Expand to 30–50 verified question–answer pairs |
 | p95 latency 11.09s (CPU rerank) | Accepted for now | Reranker optimization (see bottleneck section) |
-| Single shared Chroma collection (no multi-tenant isolation) | Open | Per-user collections |
+| SQLite relational DB on free tier is ephemeral | Open | Move DATABASE_URL to Neon/Postgres |
 
 CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. Ragas evaluation runs locally via `python3 eval/eval_runner.py` — the badge reflects lint + tests, not an eval gate.
 
@@ -404,14 +405,43 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-cp .env.example .env   # add GROQ_API_KEY (at minimum)
+cp .env.example .env   # add GROQ_API_KEY, VOYAGE_API_KEY, JWT_SECRET, QDRANT_URL, QDRANT_API_KEY
 
-streamlit run app.py   # the whole app — one process, no backend
+# Terminal 1 — API
+uvicorn src.api.app:app --host 0.0.0.0 --port 8001
+
+# Terminal 2 — Frontend
+cd frontend
+npm ci
+npm run dev
+```
+
+Or with Docker Compose for the API:
+
+```bash
+docker-compose up -d
 ```
 
 Optional: `GROQ_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CHROMA_HOST`, `LOG_LEVEL`, quota overrides (`DAILY_QUERY_LIMIT`, `DOCUMENT_LIMIT`, `STORAGE_LIMIT_MB`), guest tier (`ANON_QUERY_LIMIT`).
 
 Required: at least one of `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` in `.env`.
+
+---
+
+## Deployment
+
+GroundedAI deploys as two Render services:
+
+- **API:** Docker Web Service using `Dockerfile.api`
+- **Frontend:** Static Site from `frontend/dist`
+
+Required secrets:
+
+- `GROQ_API_KEY`, `VOYAGE_API_KEY`, `JWT_SECRET`
+- `QDRANT_URL`, `QDRANT_API_KEY`
+- `DATABASE_URL` for persistent Postgres in production
+
+See `render.yaml` and the PR notes for exact build settings.
 
 ---
 
