@@ -1,0 +1,54 @@
+services:
+  # FastAPI backend (Docker Web Service)
+  - type: web
+    name: groundedai-api
+    env: docker
+    dockerfilePath: Dockerfile.api
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://groundedai-api.onrender.com/auth/google/callback
+      - key: FRONTEND_URL
+        value: https://groundedai-frontend.onrender.com
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: ENABLE_DEMO_LOGIN
+        value: off
+      - key: LANGFUSE_ENABLED
+        value: off
+      - key: LANGFUSE_SAMPLE_RATE
+        value: "0.0"
+
+  # React SPA (Static Site)
+  - type: web
+    name: groundedai-frontend
+    env: static
+    plan: free
+    region: frankfurt
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://groundedai-api.onrender.com
