@@ -11,6 +11,8 @@ import Documents from "./pages/Documents";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Settings from "./pages/Settings";
+import Billing from "./pages/Billing";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 
@@ -35,6 +37,7 @@ function Nav() {
           {user && <Link to="/chat">Chat</Link>}
           {user && <Link className="nav-wide" to="/documents">Documents</Link>}
           {user && <Link className="nav-wide" to="/dashboard">Dashboard</Link>}
+          {user && <Link className="nav-wide" to="/settings">Settings</Link>}
           {user ? (
             <button
               className="btn btn-ghost nav-btn"
@@ -89,6 +92,22 @@ export default function App() {
             element={
               <RequireAuth>
                 <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <Settings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <RequireAuth>
+                <Billing />
               </RequireAuth>
             }
           />

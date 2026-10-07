@@ -75,7 +75,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Is there a free tier?",
-    "Yes. Guests get 3 questions and 1 document with no signup. The Free plan ($0) adds 500 queries a day and 5 documents. Pro ($9/mo) and Teams ($29/mo) are listed as previews; billing activates later.",
+    "Yes. Guests get 3 questions and 1 document with no signup. The Free plan ($0) includes 10 verified answers a day, 5 documents, and 100 MB of storage. Pro ($9/mo) multiplies every quota by ten. Teams ($29/mo) is listed as a preview; billing activates when Stripe goes live.",
   ],
   [
     "Where does my data live?",
@@ -98,7 +98,7 @@ const PRICING: {
   {
     name: "Free",
     amount: "$0",
-    features: ["500 queries / day", "5 documents", "1 workspace", "Community support"],
+    features: ["10 answers / day", "5 documents", "1 workspace", "Community support"],
     note: "Live now",
     featured: true,
   },
@@ -106,7 +106,7 @@ const PRICING: {
     name: "Pro",
     amount: "$9",
     unit: " / mo",
-    features: ["5,000 queries / day", "100 documents", "All workspaces", "Priority support"],
+    features: ["100 answers / day", "50 documents", "All workspaces", "Priority support"],
     note: "Coming soon",
   },
   {

@@ -102,7 +102,10 @@ export default function Chat() {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [workspace, setWorkspace] = useState<Workspace>("academic");
+  const [workspace, setWorkspace] = useState<Workspace>(() => {
+    const stored = localStorage.getItem("gai_workspace");
+    return stored === "legal" || stored === "academic" ? stored : "academic";
+  });
   const [usage, setUsage] = useState<Usage | null>(null);
   const [traceId, setTraceId] = useState<number | null>(null);
   const busy = useRef(false);

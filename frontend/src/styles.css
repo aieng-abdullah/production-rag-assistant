@@ -1650,3 +1650,60 @@ h1, h2, h3 {
   .doc-row { flex-wrap: wrap; }
   .doc-name { flex-basis: 100%; }
 }
+
+/* --- settings + billing ---------------------------------------------------- */
+
+.settings-card { display: flex; flex-direction: column; gap: 0.9rem; margin-bottom: 1.1rem; }
+.settings-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.settings-strong { display: block; font-size: 17px; font-family: var(--serif); font-weight: 500; }
+.settings-metrics { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.2rem; }
+.settings-metric strong { display: block; font-family: var(--serif); font-size: 1.5rem; font-weight: 500; }
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+.pricing-card { display: flex; flex-direction: column; gap: 0.7rem; }
+.pricing-featured { border-color: rgba(70, 101, 79, 0.55); background: rgba(70, 101, 79, 0.05); }
+.pricing-price { margin: 0; font-family: var(--serif); font-size: 2.4rem; color: var(--ink-1); }
+.pricing-price em {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-left: 0.4rem;
+}
+.pricing-features { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.45rem; flex: 1; }
+.pricing-features li {
+  font-size: 14px;
+  color: var(--ink-2);
+  padding-left: 1rem;
+  position: relative;
+}
+.pricing-features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pricing-cta { text-align: center; justify-content: center; }
+.pricing-current {
+  display: block;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.7rem;
+}
