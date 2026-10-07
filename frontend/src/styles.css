@@ -1719,3 +1719,45 @@ h1, h2, h3 {
   color: var(--ink-1);
   font-style: normal;
 }
+
+/* --- chat drag overlay ---------------------------------------------------- */
+
+.chat-drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(23, 33, 29, 0.45);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: answer-in 0.2s ease;
+  border-radius: inherit;
+}
+.chat-drag-content {
+  pointer-events: auto;
+  text-align: center;
+  padding: 2.5rem 2rem;
+  background: var(--paper);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 24px 56px -32px rgba(30, 26, 20, 0.7);
+  transform: scale(1);
+  animation: source-pop 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.chat-drag-content .chip {
+  background: rgba(70, 101, 79, 0.12);
+  color: var(--accent);
+  border-color: var(--accent);
+  margin-bottom: 0.8rem;
+  display: inline-block;
+}
+.chat-drag-content p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  color: var(--ink-1);
+}
+@media (max-width: 560px) {
+  .chat-drag-content { padding: 2rem 1.5rem; }
+}
