@@ -42,7 +42,7 @@ if st.query_params.get("guest") == "1":
 page_config("Sign in — GroundedAI")
 init_session_state()
 load_css()
-start_rag_warmup()  # torch/models load in background while user reads login
+start_rag_warmup()  # config + Voyage ping in background while user reads login
 
 menu()
 

@@ -1,33 +1,132 @@
-"""Embedding generation using LangChain HuggingFaceEmbeddings."""
+"""Embedding generation via the Voyage AI API (``voyage-4-lite``).
 
+Replaces ``HuggingFaceEmbeddings`` (PLAN-render-react Phase 1) — torch and
+the ~90MB model download leave the container; embeddings are API-only.
+
+``VoyageAIEmbeddings`` implements LangChain's ``Embeddings`` interface so
+``src/db/chroma_client.py`` keeps passing it straight to
+``Chroma(embedding_function=…)``. Module functions ``embed_query`` /
+``embed_chunks`` keep their names and signatures — every consumer
+(``chroma_search``, ingestion pipeline, eval) stays untouched.
+
+Vectors are L2-normalized, matching the old local embedder
+(``normalize_embeddings=True``): dot product == cosine similarity.
+"""
+
+import logging
 from threading import Lock
-from typing import List, Dict
+from typing import Dict, List
 
+import httpx
+import numpy as np
+from langchain_core.embeddings import Embeddings as LangChainEmbeddings
 from loguru import logger
+from tenacity import (
+    before_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-# Config must import first: it sets HF_HUB_OFFLINE before huggingface_hub
-# loads (hub reads that env at import time — see bottom of config.py).
 from src.config import Config
-from langchain_huggingface import HuggingFaceEmbeddings
+from src.voyage_usage import record as record_usage
 
 
-# Lazy-loaded model instance (lock: page render + background warm-up race)
-_model: HuggingFaceEmbeddings | None = None
+def _normalize(vector: List[float]) -> List[float]:
+    """L2-normalize one embedding (parity with the local model's output)."""
+    arr = np.asarray(vector, dtype=np.float64)
+    norm = float(np.linalg.norm(arr))
+    if norm == 0:
+        logger.warning("Voyage returned a zero vector — passing through unnormalized")
+        return [float(x) for x in arr]
+    return (arr / norm).tolist()
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type(httpx.HTTPError),
+    before=before_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _post_embeddings(texts: List[str], input_type: str) -> List[List[float]]:
+    """POST ``/embeddings`` with retry + exponential backoff.
+
+    Retries transport errors, timeouts and 429/5xx; client errors (bad key,
+    bad model) raise immediately. ``input_type`` is ``"query"`` or
+    ``"document"`` — Voyage optimizes the embedding space per side.
+    """
+    if not Config.VOYAGE_API_KEY:
+        raise EnvironmentError(
+            "VOYAGE_API_KEY is not set — embeddings are API-only (no local "
+            "fallback). Add it to .env."
+        )
+
+    response = httpx.post(
+        f"{Config.VOYAGE_BASE_URL}/embeddings",
+        json={
+            "model": Config.VOYAGE_EMBEDDING_MODEL,
+            "input": texts,
+            "input_type": input_type,
+            "truncation": True,
+        },
+        headers={"Authorization": f"Bearer {Config.VOYAGE_API_KEY}"},
+        timeout=Config.EMBED_TIMEOUT_S,
+    )
+    if response.status_code == 429 or response.status_code >= 500:
+        response.raise_for_status()
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Voyage embeddings rejected request (HTTP {response.status_code}): "
+            f"{response.text[:300]}"
+        )
+
+    data = response.json()
+    usage = data.get("usage") or {}
+    record_usage("embeddings", int(usage.get("total_tokens") or 0))
+
+    items = sorted(data.get("data") or [], key=lambda item: item["index"])
+    if len(items) != len(texts):
+        raise RuntimeError(
+            f"Voyage returned {len(items)} embeddings for {len(texts)} inputs"
+        )
+    return [_normalize(item["embedding"]) for item in items]
+
+
+class VoyageAIEmbeddings(LangChainEmbeddings):
+    """LangChain ``Embeddings`` implementation backed by Voyage."""
+
+    def __init__(self, batch_size: int | None = None) -> None:
+        self.batch_size = batch_size or Config.VOYAGE_EMBED_BATCH_SIZE
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        vectors: List[List[float]] = []
+        for start in range(0, len(texts), self.batch_size):
+            batch = texts[start : start + self.batch_size]
+            vectors.extend(_post_embeddings(batch, input_type="document"))
+            logger.debug(f"Embedded batch {start // self.batch_size + 1} ({len(batch)} texts)")
+        return vectors
+
+    def embed_query(self, text: str) -> List[float]:
+        return _post_embeddings([text], input_type="query")[0]
+
+
+# Lazy-loaded client (lock: page render + background warm-up race)
+_model: VoyageAIEmbeddings | None = None
 _model_lock = Lock()
 
 
-def _get_model() -> HuggingFaceEmbeddings:
-    """Get or initialize the embedding model."""
+def _get_model() -> VoyageAIEmbeddings:
+    """Get or initialize the embedding client (singleton — no model to load)."""
     global _model
     if _model is None:
         with _model_lock:
             if _model is None:
-                _model = HuggingFaceEmbeddings(
-                    model_name=Config.EMBEDDING_MODEL,
-                    model_kwargs={"device": "cpu"},
-                    encode_kwargs={"normalize_embeddings": True},
+                _model = VoyageAIEmbeddings()
+                logger.info(
+                    f"Voyage embeddings client ready: {Config.VOYAGE_EMBEDDING_MODEL}"
                 )
-                logger.info(f"Loaded embedding model: {Config.EMBEDDING_MODEL}")
     return _model
 
 
@@ -40,25 +139,30 @@ def embed_query(text: str) -> List[float]:
     Returns:
         List of float embedding values.
     """
-    model = _get_model()
-    embedding = model.embed_query(text)
-    return embedding
+    return _get_model().embed_query(text)
 
 
-def embed_chunks(chunks: List[Dict], batch_size: int = 32) -> List[Dict]:
+def embed_chunks(chunks: List[Dict], batch_size: int | None = None) -> List[Dict]:
     """Generate embeddings for chunks in batches.
 
-
+    Args:
+        chunks: Chunk dicts with a ``text`` key (metadata passes through).
+        batch_size: Inputs per API call; defaults to the configured
+            ``VOYAGE_EMBED_BATCH_SIZE``.
     """
-    model = _get_model()
+    if not chunks:
+        logger.warning("embed_chunks() called with no chunks — returning []")
+        return chunks
+
     texts = [chunk["text"] for chunk in chunks]
+    size = batch_size or Config.VOYAGE_EMBED_BATCH_SIZE
 
-    # HuggingFaceEmbeddings handles batching internally
-    logger.debug(f"Embedding {len(texts)} chunks (batch_size hint: {batch_size})")
+    logger.debug(f"Embedding {len(texts)} chunks (batch_size: {size})")
+    vectors: List[List[float]] = []
+    for start in range(0, len(texts), size):
+        vectors.extend(_post_embeddings(texts[start : start + size], input_type="document"))
 
-    embeddings = model.embed_documents(texts)
-
-    for chunk, embedding in zip(chunks, embeddings):
+    for chunk, embedding in zip(chunks, vectors):
         chunk["embedding"] = embedding
 
     logger.debug(f"Successfully embedded {len(chunks)} chunks")

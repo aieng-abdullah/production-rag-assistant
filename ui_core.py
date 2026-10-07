@@ -57,11 +57,11 @@ def init_session_state() -> None:
 
 
 def start_rag_warmup() -> None:
-    """Load the RAG stack in a background thread (~25s of torch/model work).
+    """Validate config + ping Voyage in a background thread at startup.
 
-    Runs while the visitor reads the login page, so the first chat render
-    finds imports/models already warm. Failures only cost the original
-    first-render latency — logged loudly, never raised into the UI.
+    There is no local model left to warm (PLAN-render-react Phase 1): this
+    checks keys and reaches the Voyage API so the first chat does not pay
+    for a dead connection. Log-only — warm-up failures never raise into UI.
     """
     global _warmup_started
     with _warmup_lock:
@@ -71,12 +71,27 @@ def start_rag_warmup() -> None:
 
     def _warm() -> None:
         try:
-            from src.retrieval.cross_encoder import _get_model as _reranker
-            from src.ingestion.embedder import _get_model as _embedder
+            Config.validate()
 
-            # Warm up embedder and reranker (BM25 needs tenant_id, skip here)
-            _embedder()
-            _reranker()
+            # Voyage reachability ping: any HTTP response means the route is
+            # live; only transport errors count as unreachable.
+            try:
+                if not Config.VOYAGE_API_KEY:
+                    logger.warning(
+                        "VOYAGE_API_KEY missing — embeddings/rerank will fail on first use"
+                    )
+                else:
+                    import httpx
+
+                    resp = httpx.get(
+                        Config.VOYAGE_BASE_URL,
+                        timeout=5.0,
+                        follow_redirects=True,
+                    )
+                    logger.info(f"Voyage API reachable (HTTP {resp.status_code})")
+            except Exception as ping_exc:
+                logger.warning(f"Voyage API unreachable: {ping_exc}")
+
             logger.info("RAG warm-up complete")
         except Exception as exc:
             logger.error("RAG warm-up failed (first query pays): {err}", err=exc)
