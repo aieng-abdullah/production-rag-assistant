@@ -26,7 +26,7 @@ USER appuser
 EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT','8001') + '/health')"
 
 # Migrations run at boot (fresh DBs); SIGTERM reaches uvicorn via exec.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn src.api.app:app --host 0.0.0.0 --port 8001"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8001}"]
