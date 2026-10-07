@@ -134,7 +134,7 @@ h1, h2, h3 {
 
 /* --- shell ------------------------------------------------------------- */
 
-.shell { max-width: 1160px; margin: 0 auto; padding: 0 40px; }
+.shell { max-width: 1240px; margin: 0 auto; padding: 0 40px; }
 @media (max-width: 720px) { .shell { padding: 0 24px; } }
 
 .nav {
@@ -147,7 +147,7 @@ h1, h2, h3 {
   border-bottom: 1px solid var(--hairline);
 }
 .nav-inner {
-  max-width: 1160px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 40px;
   height: 62px;
@@ -1009,7 +1009,7 @@ h1, h2, h3 {
 /* --- chat ----------------------------------------------------------------- */
 
 .chat-page {
-  max-width: 820px;
+  max-width: 1080px;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 62px);
@@ -1094,7 +1094,7 @@ h1, h2, h3 {
   animation: answer-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .chat-empty h2 {
-  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-size: clamp(2rem, 4.5vw, 2.8rem);
   margin: 0.8rem 0 0.6rem;
 }
 .chat-empty p { color: var(--ink-2); font-size: 15px; }
@@ -1109,9 +1109,9 @@ h1, h2, h3 {
   background: rgba(255, 253, 247, 0.7);
   color: var(--ink-1);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 500;
-  padding: 0.8rem 1.1rem;
+  padding: 0.85rem 1.2rem;
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
@@ -1132,14 +1132,14 @@ h1, h2, h3 {
   border-radius: 14px 14px 4px 14px;
   box-shadow: 0 12px 26px -18px rgba(30, 26, 20, 0.7);
 }
-.msg-user p { margin: 0; font-size: 15px; line-height: 1.55; }
+.msg-user p { margin: 0; font-size: 16px; line-height: 1.6; }
 .msg-ai {
   align-self: flex-start;
   background: rgba(255, 253, 247, 0.85);
   border: 1px solid var(--hairline);
   border-left: 3px solid var(--ws, var(--accent));
   border-radius: 4px 14px 14px 4px;
-  padding: 1rem 1.25rem 1.1rem;
+  padding: 1.15rem 1.45rem 1.3rem;
 }
 .msg-ai-head {
   display: flex;
@@ -1164,7 +1164,7 @@ h1, h2, h3 {
   transition: color 0.2s ease, background 0.2s ease;
 }
 .msg-actions button:hover { color: var(--ink-1); background: var(--paper-2); }
-.msg-answer { margin: 0; font-size: 15.5px; line-height: 1.7; }
+.msg-answer { margin: 0; font-size: 16.5px; line-height: 1.72; }
 .cite-chip {
   display: inline-block;
   font-family: var(--mono);
@@ -1247,7 +1247,7 @@ h1, h2, h3 {
   color: var(--ink-3);
   text-transform: uppercase;
 }
-.src-row p { margin: 0.35rem 0 0; font-size: 14px; color: var(--ink-2); line-height: 1.6; }
+.src-row p { margin: 0.35rem 0 0; font-size: 15px; color: var(--ink-2); line-height: 1.62; }
 .claim-row {
   display: flex;
   gap: 0.7rem;
@@ -1267,7 +1267,7 @@ h1, h2, h3 {
 .claim-supported { color: #5f7d52; background: rgba(95,125,82,0.12); }
 .claim-partial { color: #9a7b3f; background: rgba(154,123,63,0.12); }
 .claim-unsupported { color: #a4553f; background: rgba(164,85,63,0.12); }
-.claim-text { font-size: 14px; color: var(--ink-2); }
+.claim-text { font-size: 15px; color: var(--ink-2); }
 
 .msg-loading { display: flex; align-items: center; gap: 0.9rem; }
 .msg-loading p { margin: 0; color: var(--ink-3); font-family: var(--serif); font-style: italic; font-size: 14.5px; }
@@ -1311,7 +1311,7 @@ h1, h2, h3 {
   border-radius: 12px;
   padding: 0.9rem 1.1rem;
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 16px;
   color: var(--ink-1);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -1434,7 +1434,7 @@ h1, h2, h3 {
 
 /* --- panel pages (documents, dashboard) ------------------------------------ */
 
-.panel-page { max-width: 960px; padding-top: 2rem; padding-bottom: 4rem; }
+.panel-page { max-width: 1060px; padding-top: 2rem; padding-bottom: 4rem; }
 .panel-head {
   display: flex;
   justify-content: space-between;
