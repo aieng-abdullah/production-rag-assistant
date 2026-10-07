@@ -10,7 +10,7 @@ uvicorn src.api.app:app --host 0.0.0.0 --port 8001
 cd frontend && npm run dev
 
 # Lint (same as CI)
-ruff check src tests app.py eval alembic
+ruff check src tests eval alembic
 cd frontend && npm run lint
 
 # Local test gate (CI runs the same tests WITHOUT the coverage gate)
@@ -31,7 +31,6 @@ cd frontend && npm run build
 Two-tier: FastAPI backend + React SPA frontend. No monorepo.
 
 ```
-app.py                        # Legacy Streamlit UI (being phased out)
 src/
   config.py                   # Centralized config, reads .env, validates at startup
   ingestion/                  # PDF → chunks → embeddings (Voyage) → ChromaDB
@@ -69,7 +68,7 @@ tests/                        # Pytest suite (backend)
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 
-1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests app.py eval alembic` + `cd frontend && npm run lint`
+1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests eval alembic` + `cd frontend && npm run lint`
 2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0` + `cd frontend && npm run build`
 
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` skipped).
@@ -86,7 +85,7 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
   `git log -p | grep -iE "sk-[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{10,}|ghp_[a-zA-Z0-9]{20,}|gsk_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}"`
 - Resolve conflicts inside the feature branch. No `merge:` conflict-fix commits on main.
 - Branch policy: delete merged feature/fix/chore/docs branches after squash-merge; keep long-lived branches (`main`, `develop`, `release/*`, `gh-pages`) and any unmerged branch.
-- Run `ruff check src tests app.py eval alembic` + `pytest -m "not slow" --cov-fail-under=70` + `cd frontend && npm run build && npm run lint` green locally before push (keep coverage ≥70%).
+- Run `ruff check src tests eval alembic` + `pytest -m "not slow" --cov-fail-under=70` + `cd frontend && npm run build && npm run lint` green locally before push (keep coverage ≥70%).
 
 ## Change Review Protocol (PR Contract)
 
@@ -142,4 +141,4 @@ No coverage gate on PRs — keep ≥70% locally with the command above before pu
 - **Never loosen test assertions to pass.** If a test fails, fix the code — not the test.
 - **Never edit `.env` / `.env.*` without explanation first.** Before touching one you MUST tell the user: (1) which variable, (2) current value, (3) new value, (4) why. Wait for explicit approval.
 - **Never make cosmetic changes to pass time.** No import reordering, no refactoring working code, no `try/except` → `contextlib.suppress` swaps unless asked.
-- Pages call `src.services.RAGService` directly (single-process mode). `app.py` keeps no `src.*` imports; `src/` stays framework-free (no FastAPI/Streamlit imports below `app.py`).
+- `src/` stays framework-free (no FastAPI/Streamlit imports below `src/api`).
