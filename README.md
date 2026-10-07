@@ -1,3 +1,4 @@
+
 <div align="center">
 
 <img width="300" height="300" alt="artificial-intelligence" src="https://github.com/user-attachments/assets/b92417d0-a09f-4353-883b-d6f545e727e8" />
@@ -23,7 +24,7 @@
 **[Try the live  →](https://groundedai-app.streamlit.app/)**
 
 <p align="center">
-  <img src="docs/image/groundedai.PNG" alt="GroundedAI chat page — citation-verified answers" width="920" />
+  <img width="1884" height="911" alt="liveground" src="https://github.com/user-attachments/assets/773d9feb-4840-429c-87d4-5be7569efbd4" />
 </p>
 
 </div>
