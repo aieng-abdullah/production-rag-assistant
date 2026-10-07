@@ -13,6 +13,7 @@ from qdrant_client.http.models import (
     FieldCondition,
     Filter,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -77,6 +78,20 @@ class QdrantStore:
             vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
         )
         logger.info(f"Created Qdrant collection {self.collection_name} size={vector_size}")
+        self._ensure_payload_indexes()
+
+    def _ensure_payload_indexes(self) -> None:
+        if not self.client.collection_exists(self.collection_name):
+            return
+        for field in ("tenant_id", "workspace", "doc_id"):
+            try:
+                self.client.create_payload_index(
+                    self.collection_name,
+                    field_name=field,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+            except Exception as exc:
+                logger.debug(f"Payload index {field} not created: {exc}")
 
     def _scroll(self, scroll_filter: Filter | None = None, include: list[str] | None = None):
         include = include or ["documents", "metadatas"]
@@ -221,6 +236,10 @@ def _get_vectorstore() -> QdrantStore:
     if _vectorstore is None:
         client = _make_client()
         _vectorstore = QdrantStore(client, Config.COLLECTION_NAME)
+        try:
+            _vectorstore._ensure_payload_indexes()
+        except Exception as exc:
+            logger.debug(f"Payload index bootstrap skipped: {exc}")
         _backfill_metadata(_vectorstore)
         logger.info(f"Qdrant vectorstore initialized: {Config.COLLECTION_NAME}")
     return _vectorstore
