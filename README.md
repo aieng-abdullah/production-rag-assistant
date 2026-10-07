@@ -21,7 +21,7 @@
 
 **Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
 
-**[Try the live  →](https://groundedai-app.streamlit.app/)**
+**[Try IT  →]( https://groundedai-frontend.onrender.com)**
 
 <p align="center">
   <img width="1884" height="911" alt="liveground" src="https://github.com/user-attachments/assets/773d9feb-4840-429c-87d4-5be7569efbd4" />
