@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, api } from "../api/client";
+import { ApiError, api, apiUpload } from "../api/client";
 import TraceModal from "../components/TraceModal";
 import { useToast } from "../components/Toast";
 import WorkspaceSwitch, { WS_ACCENT, type Workspace } from "../components/WorkspaceSwitch";
@@ -110,6 +110,53 @@ export default function Chat() {
   const [traceId, setTraceId] = useState<number | null>(null);
   const busy = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOver(true);
+  }
+
+  function handleDragLeave(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOver(false);
+  }
+
+  async function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast("Only PDF files can be uploaded.", "error");
+      return;
+    }
+    await uploadFile(file);
+  }
+
+  async function uploadFile(file: File) {
+    toast(`Indexing ${file.name}…`, "info");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("workspace", workspace);
+      const created = await apiUpload<{ id: number; filename: string; status: string }>(
+        "/documents",
+        form
+      );
+      toast(`${created.filename} indexed. Ask about it.`, "success");
+      void refreshUsage();
+    } catch (error) {
+      toast(
+        error instanceof ApiError ? error.message : "Upload failed",
+        "error"
+      );
+    }
+  }
+
   async function refreshUsage() {
     try {
       setUsage(await api<Usage>("/usage"));
@@ -197,7 +244,7 @@ export default function Chat() {
     usage !== null ? Math.max(usage.queries.limit - usage.queries.used, 0) : null;
 
   return (
-    <main className="chat-page shell">
+    <main className="chat-page shell" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       <header className="chat-bar">
         <WorkspaceSwitch value={workspace} onChange={setWorkspace} />
         <div className="chat-bar-right">
@@ -378,6 +425,14 @@ export default function Chat() {
       )}
 
       {traceId !== null && <TraceModal answerId={traceId} onClose={() => setTraceId(null)} />}
+      {dragOver && (
+        <div className="chat-drag-overlay" role="status" aria-live="polite">
+          <div className="chat-drag-content">
+            <span className="chip">Drop to upload</span>
+            <p>Release to add a PDF to {workspace}</p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
