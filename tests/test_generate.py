@@ -396,7 +396,11 @@ class TestGenerate:
 
     @patch("src.generation.chain._generate_traced")
     @patch("src.generation.chain.get_langfuse_client")
-    def test_generate_with_langfuse_calls_traced(self, mock_lf, mock_traced):
+    @patch("src.generation.chain.should_trace_request")
+    @patch("src.generation.chain.langfuse_enabled")
+    def test_generate_with_langfuse_calls_traced(self, mock_enabled, mock_should_trace, mock_lf, mock_traced):
+        mock_enabled.return_value = True
+        mock_should_trace.return_value = True
         mock_lf.return_value = MagicMock()
         mock_traced.return_value = CitedAnswer(
             answer="[SOURCE 1]",
@@ -412,10 +416,14 @@ class TestGenerate:
     @patch("src.generation.chain._run_pipeline")
     @patch("src.generation.chain._generate_traced")
     @patch("src.generation.chain.get_langfuse_client")
+    @patch("src.generation.chain.should_trace_request")
+    @patch("src.generation.chain.langfuse_enabled")
     def test_generate_traced_importerror_falls_back(
-        self, mock_lf, mock_traced, mock_pipeline
+        self, mock_enabled, mock_should_trace, mock_lf, mock_traced, mock_pipeline
     ):
         """A broken Langfuse integration must degrade to the untraced pipeline."""
+        mock_enabled.return_value = True
+        mock_should_trace.return_value = True
         mock_lf.return_value = MagicMock()
         mock_traced.side_effect = ImportError("No module named 'langfuse.langchain'")
         mock_pipeline.return_value = CitedAnswer(

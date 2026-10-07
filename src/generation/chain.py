@@ -36,7 +36,7 @@ from src.generation.providers import (
 )
 from src.config import Config
 from src.db.chroma_client import DEFAULT_TENANT, count_chunks
-from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client
+from src.monitoring.langfuse_tracer import flush_langfuse, get_langfuse_client, langfuse_enabled, should_trace_request, langfuse_debug, _redact_for_debug
 
 
 def _usage_from_lc_response(response: Any) -> dict[str, int] | None:
@@ -287,17 +287,23 @@ def _generate_traced(
     """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
 
+    debug = langfuse_debug()
+
     trace_id = lf.create_trace_id()
     trace_context: dict[str, str] = {"trace_id": trace_id}
 
     t0 = monotonic()
+
+    # Helper to redact sensitive data based on debug mode
+    def _safe(data: Any) -> Any:
+        return _redact_for_debug(data, debug)
 
     try:
         with lf.start_as_current_observation(
             name="rag-generate",
             as_type="chain",
             trace_context=trace_context,
-            input={
+            input=_safe({
                 "query": query,
                 "top_k": Config.TOP_K_RERANK,
                 "corpus_chunk_count": count_chunks(
@@ -305,19 +311,19 @@ def _generate_traced(
                 ),
                 "tenant_id": tenant_id,
                 "workspace": workspace,
-            },
+            }),
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
             # --- Retrieval ---
             with root.start_as_current_observation(
                 name="retrieval",
                 as_type="retriever",
-                input={
+                input=_safe({
                     "query": query,
                     "corpus_chunk_count": count_chunks(
                         tenant_id=tenant_id, workspace=workspace
                     ),
-                },
+                }),
             ) as retr:
                 top_chunks = retrieval(
                     query,
@@ -327,7 +333,7 @@ def _generate_traced(
                     workspace=workspace,
                 )
                 logger.debug(f"Retrieved {len(top_chunks)} top chunks")
-                retr.update(output={"chunks_retrieved": len(top_chunks)})
+                retr.update(output=_safe({"chunks_retrieved": len(top_chunks)}))
 
             # --- Prompt build ---
             with root.start_as_current_observation(
@@ -338,7 +344,7 @@ def _generate_traced(
                     query, top_chunks, workspace=workspace
                 )
                 logger.debug(f"Generated citation prompt: {citation_prompt}")
-                pb.update(output={"prompt_chars": len(citation_prompt)})
+                pb.update(output=_safe({"prompt_chars": len(citation_prompt)}))
 
             # --- LLM call ---
             handler = CallbackHandler(
@@ -363,13 +369,13 @@ def _generate_traced(
                     raise
                 answer_text = structured_to_prose(structured)
                 llm_span.update(
-                    output={
+                    output=_safe({
                         "claims": len(structured.claims),
                         "abstained": structured.abstained,
                         "verifications": [v.model_dump() for v in verifications],
                         "answer_chars": len(answer_text),
-                    },
-                    metadata={"token_usage": usage} if usage else None,
+                    }),
+                    metadata=_safe({"token_usage": usage}) if usage else None,
                 )
 
             # --- Citation verification (deterministic, traced) ---
@@ -380,16 +386,16 @@ def _generate_traced(
             with root.start_as_current_observation(
                 name="citation-validation",
                 as_type="evaluator",
-                input={"answer_preview": (answer_text or "")[:300]},
+                input=_safe({"answer_preview": (answer_text or "")[:300]}),
             ) as val_span:
                 val_span.update(
-                    output={
+                    output=_safe({
                         "quote_verified": not problems,
                         "verification_status": verification["status"],
                         "claims": len(structured.claims),
                         "abstained": structured.abstained,
                         "sources_count": len(sources),
-                    }
+                    })
                 )
             cited = CitedAnswer(
                 answer=answer_text,
@@ -402,14 +408,14 @@ def _generate_traced(
 
             total_ms = (monotonic() - t0) * 1000
             root.update(
-                output={
+                output=_safe({
                     "answer": cited.answer,
                     "sources_count": len(cited.sources),
                     "claims": len(structured.claims),
                     "verification_status": verification["status"],
                     "quote_verified": True,
                     "total_latency_ms": total_ms,
-                }
+                })
             )
             return cited
     finally:
@@ -424,6 +430,11 @@ def generate(
     workspace: str = Config.DEFAULT_WORKSPACE,
 ) -> CitedAnswer:
     """Generate a cited answer for the given query using the RAG pipeline."""
+    # Check if tracing is enabled and we should sample this request
+    if not langfuse_enabled() or not should_trace_request():
+        return _run_pipeline(
+            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+        )
     lf = get_langfuse_client()
     if lf is None:
         return _run_pipeline(
