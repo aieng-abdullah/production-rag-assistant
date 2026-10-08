@@ -83,7 +83,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Who is this for?",
-    "Lawers reviewing statutes and contracts, and researchers working through papers. Anyone who needs answers they can defend with a page number.",
+    "Lawyers reviewing statutes and contracts, and researchers working through papers. Anyone who needs answers they can defend with a page number.",
   ],
 ];
 

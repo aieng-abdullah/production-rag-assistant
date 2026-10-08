@@ -58,11 +58,15 @@ export async function api<T>(
       },
     });
   } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    if (!timedOut) {
+      console.error(`Cannot reach API at ${API_BASE}`, error);
+    }
     throw new ApiError(
       0,
-      error instanceof DOMException && error.name === "AbortError"
-        ? "Request timed out (60s). Is the API running?"
-        : `Cannot reach the API at ${API_BASE}`,
+      timedOut
+        ? "The service is taking longer than usual — please try again."
+        : "Can't reach the server right now — please try again in a moment.",
     );
   } finally {
     clearTimeout(timer);
@@ -101,11 +105,15 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    if (!timedOut) {
+      console.error(`Cannot reach API at ${API_BASE}`, error);
+    }
     throw new ApiError(
       0,
-      error instanceof DOMException && error.name === "AbortError"
-        ? "Upload timed out (60s)."
-        : `Cannot reach the API at ${API_BASE}`,
+      timedOut
+        ? "The upload is taking longer than usual — please try again."
+        : "Can't reach the server right now — please try again in a moment.",
     );
   } finally {
     clearTimeout(timer);
