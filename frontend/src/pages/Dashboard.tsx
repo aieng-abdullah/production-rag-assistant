@@ -3,6 +3,7 @@ import { ApiError, api } from "../api/client";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
+import { tierLabel } from "../utils/tier";
 
 interface Usage {
   tier: string;
@@ -124,12 +125,14 @@ export default function Dashboard() {
         <div className="card metric-card">
           <span className="demo-label">Plan</span>
           <strong className="metric-value">
-            {usage ? (usage.tier === "anonymous" ? "Guest" : "Member") : "–"}
+            {usage ? tierLabel(usage.tier) : "–"}
           </strong>
           <span className="metric-sub">
             {usage?.tier === "anonymous"
               ? "Sign in for higher limits"
-              : "Upgrade in Billing for 10x"}
+              : usage?.tier === "pro"
+                ? "Pro quotas active (10x)"
+                : "Upgrade in Billing for 10x"}
           </span>
         </div>
       </section>

@@ -9,10 +9,10 @@ from src.db.models import Document
 from src.services.quotas import (
     STORAGE_LIMIT_BYTES,
     document_limit_for,
-    is_anonymous,
     queries_today,
     query_limit_for,
     storage_bytes,
+    tier_for,
 )
 
 __all__ = ["router"]
@@ -24,8 +24,9 @@ router = APIRouter(prefix="/usage", tags=["usage"])
 def usage(user_id: int = Depends(require_user)) -> dict:
     """Current quota consumption — drives sidebar meters and 429 previews.
 
-    Limits are tier-aware (guest vs member, PLAN PR-6); `tier` lets the
-    UI show guest copy without re-deriving it from the email.
+    `tier` is the effective billing tier (`anonymous` | `free` | `pro`) so
+    the UI can label the plan and show tier-scaled limits without reading
+    the Subscription table itself.
     """
     with session_scope() as session:
         used_queries = queries_today(session, user_id)
@@ -35,7 +36,7 @@ def usage(user_id: int = Depends(require_user)) -> dict:
             .scalar()
             or 0
         )
-        tier = "anonymous" if is_anonymous(session, user_id) else "member"
+        tier = tier_for(session, user_id)
         query_limit = query_limit_for(session, user_id)
         document_limit = document_limit_for(session, user_id)
     return {

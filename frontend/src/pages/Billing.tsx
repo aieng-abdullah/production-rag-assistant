@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { tierLabel } from "../utils/tier";
 
 interface Usage {
   tier: string;
@@ -29,7 +30,7 @@ const PLANS = [
     features: [
       "100 verified answers per day (10x)",
       "50 documents",
-      "1 GB storage",
+      "100 MB storage (shared cap)",
       "Stripe billing portal for invoices",
     ],
     cta: "Upgrade to Pro",
@@ -99,8 +100,7 @@ export default function Billing() {
     }
   }
 
-  const currentPlan =
-    usage === null ? "…" : usage.tier === "anonymous" ? "Guest" : "Free";
+  const currentPlan = usage === null ? "…" : tierLabel(usage.tier);
 
   return (
     <main className="panel-page shell">
@@ -109,7 +109,8 @@ export default function Billing() {
           <span className="chip">Plans</span>
           <h1>Billing</h1>
           <p className="panel-lede">
-            Free keeps research moving. Pro multiplies every quota by ten.
+            Free keeps research moving. Pro multiplies daily answers and
+            documents by ten.
           </p>
         </div>
       </header>
