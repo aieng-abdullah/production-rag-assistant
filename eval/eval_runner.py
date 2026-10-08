@@ -221,16 +221,31 @@ def build_eval_samples(
     samples = []
     for item in eval_dataset:
         sample_workspace = resolve_workspace(item, workspace)
-        rag_output = run_rag(item["question"], workspace=sample_workspace)
-        samples.append({
+        sample = {
             "question": item["question"],
-            "answer": rag_output["answer"],
-            "contexts": rag_output["contexts"],
+            "answer": None,
+            "contexts": [],
             "ground_truth": item.get("ground_truth", ""),
             "workspace": sample_workspace,
             "class": item.get("class", "cite"),
-        })
-        logger.info(f"Sample created: {item['question'][:50]}")
+            "generation_error": None,
+        }
+        try:
+            rag_output = run_rag(item["question"], workspace=sample_workspace)
+        except AnswerVerificationError as exc:
+            # Corpus quirks (e.g. PDF hyphenation) can make quote verification
+            # fail deterministically — record the miss instead of aborting the
+            # whole run; the sample is excluded from metric means.
+            logger.error(
+                f"Generation failed after {GENERATE_ATTEMPTS} attempts "
+                f"for {item['question'][:60]!r}: {exc}"
+            )
+            sample["generation_error"] = str(exc)
+        else:
+            sample["answer"] = rag_output["answer"]
+            sample["contexts"] = rag_output["contexts"]
+            logger.info(f"Sample created: {item['question'][:50]}")
+        samples.append(sample)
     return samples
 
 
@@ -338,9 +353,13 @@ def evaluate_samples(samples: List[Dict[str, Any]], metrics: Sequence[str]) -> p
 
 def evaluate_dataset(samples: List[Dict[str, Any]]) -> Dict[str, float]:
     """Score cite samples on all metrics, abstain samples on non-ground-truth
-    metrics only, then combine into threshold-level means."""
-    scored = [sample for sample in samples if sample.get("class") != "abstain"]
-    abstain = [sample for sample in samples if sample.get("class") == "abstain"]
+    metrics only, then combine into threshold-level means.
+
+    Samples whose generation failed (no answer to judge) are excluded.
+    """
+    usable = [sample for sample in samples if not sample.get("generation_error")]
+    scored = [sample for sample in usable if sample.get("class") != "abstain"]
+    abstain = [sample for sample in usable if sample.get("class") == "abstain"]
     frames: List[pd.DataFrame] = []
     if scored:
         df = evaluate_samples(scored, METRIC_NAMES)
@@ -392,6 +411,7 @@ def per_sample_report(samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "ground_truth": sample["ground_truth"],
             "workspace": sample["workspace"],
             "class": sample["class"],
+            "generation_error": sample.get("generation_error"),
             "scores": sample.get("scores", {}),
         }
         for sample in samples
@@ -404,11 +424,13 @@ def save_results(
     per_sample: List[Dict[str, Any]],
     workspace: str,
     output_path: str,
+    generation_failure_count: int,
 ) -> None:
     report = {
         "workspace": workspace,
         "metric_scores": scores,
         "threshold_results": threshold_results,
+        "generation_failure_count": generation_failure_count,
         "per_sample": per_sample,
     }
     with open(output_path, "w", encoding="utf-8") as f:
@@ -434,10 +456,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.info(f"Starting RAG evaluation (default workspace={args.workspace})")
     eval_dataset = load_eval_dataset(EVAL_DATASET_PATH)
     samples = build_eval_samples(eval_dataset, workspace=args.workspace)
+    failures = [s for s in samples if s.get("generation_error")]
     scores = evaluate_dataset(samples)
     threshold_results = check_thresholds(scores)
     save_results(
-        scores, threshold_results, per_sample_report(samples), args.workspace, RESULTS_PATH
+        scores,
+        threshold_results,
+        per_sample_report(samples),
+        args.workspace,
+        RESULTS_PATH,
+        generation_failure_count=len(failures),
     )
 
     print("\n==============================")
@@ -448,6 +476,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{metric}: {result['score']:.4f} "
             f"(threshold={result['threshold']}) => {result['status']}"
         )
+    if failures:
+        print(f"Generation failures excluded from scores: {len(failures)}")
     failed = gates_failed(threshold_results)
     if failed:
         print(f"FAILED gates: {', '.join(failed)}")
