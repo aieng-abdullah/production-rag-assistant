@@ -33,9 +33,40 @@ __all__ = ["router"]
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+class ChatTurn(BaseModel):
+    """One prior turn of client-held conversation history.
+
+    Content mirrors the query constraints and is re-sanitized at the
+    boundary — history enters prompts and traces exactly like the query.
+    """
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=1000)
+
+
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     workspace: Literal["legal", "academic"] = Config.DEFAULT_WORKSPACE
+    history: list[ChatTurn] = Field(default_factory=list, max_length=8)
+
+
+def _sanitize_history(turns: list[ChatTurn]) -> list[dict]:
+    """Sanitize every turn before quota reservation and before persistence.
+
+    A turn that is empty after sanitization is rejected with 422 — the same
+    rule as the query — so the client never believes context was accepted
+    when it was dropped. Returns plain dicts for the service layer.
+    """
+    cleaned: list[dict] = []
+    for index, turn in enumerate(turns):
+        content = sanitize_untrusted(turn.content)
+        if not content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"History turn {index} has no usable content",
+            )
+        cleaned.append({"role": turn.role, "content": content})
+    return cleaned
 
 
 @router.post("")
@@ -48,6 +79,8 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     The query is sanitized at the API boundary — before any quota is
     reserved and before anything is persisted — so stored traces and the
     prompt builder see the same delimiter-free, control-char-free text.
+    `history` follows the same rule and costs nothing extra: one request
+    is always 2 units regardless of history length.
     """
     query = sanitize_untrusted(body.query)
     if not query.strip():
@@ -55,6 +88,7 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Query has no usable content",
         )
+    history = _sanitize_history(body.history)
     tenant = str(user_id)
     try:
         with session_scope() as session:
@@ -70,6 +104,7 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
             query,
             bm25_index=get_bm25(tenant, body.workspace),
             workspace=body.workspace,
+            history=history,
         )
     except Exception as exc:
         try:

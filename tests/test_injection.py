@@ -178,7 +178,7 @@ def _fake_generate(monkeypatch, seen: dict):
 
     def fake_generate(
         self, tenant, query, bm25_index=None, provider_overrides=None,
-        workspace="academic",
+        workspace="academic", history=None,
     ):
         seen["query"] = query
         return CitedAnswer(answer="ok", sources=[Source(doc_id="d", page_num=1, text="t")])

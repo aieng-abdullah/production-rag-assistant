@@ -100,6 +100,17 @@ class TestProviderOverrides:
         assert anthropic.model == "claude-ui-model"
 
     @patch("src.config.Config.GROQ_API_KEY", "gsk_test")
+    @patch("src.config.Config.GROQ_MODEL", "qwen/qwen3.8-27b")
+    @patch("src.config.Config.ANTHROPIC_API_KEY", "")
+    @patch("src.config.Config.OPENAI_API_KEY", "")
+    def test_groq_model_override_wins_over_config_model(self):
+        overrides = ProviderOverrides(groq_model="openai/gpt-oss-20b")
+
+        chain = build_provider_chain(overrides)
+
+        assert chain[0].model == "openai/gpt-oss-20b"
+
+    @patch("src.config.Config.GROQ_API_KEY", "gsk_test")
     @patch("src.config.Config.ANTHROPIC_API_KEY", "")
     @patch("src.config.Config.ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
     @patch("src.config.Config.OPENAI_API_KEY", "")

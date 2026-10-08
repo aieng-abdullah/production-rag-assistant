@@ -20,7 +20,7 @@ __all__ = [
 
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
-UNTRUSTED_TAGS = ("sources", "question", "claim", "evidence", "source")
+UNTRUSTED_TAGS = ("sources", "question", "claim", "evidence", "source", "conversation")
 
 
 def strip_control_chars(text: str) -> str:

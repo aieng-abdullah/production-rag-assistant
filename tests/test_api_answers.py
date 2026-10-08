@@ -102,7 +102,7 @@ def test_chat_then_trace_roundtrip(client, headers, monkeypatch):
         RAGService,
         "generate_answer",
         lambda self, tenant, query, bm25_index=None, provider_overrides=None,
-        workspace="academic": FAKE_ANSWER,
+        workspace="academic", history=None: FAKE_ANSWER,
     )
 
     chat = client.post("/chat", json={"query": "q"}, headers=headers).json()
@@ -153,7 +153,7 @@ def test_chat_survives_persist_failure(client, headers, monkeypatch):
         RAGService,
         "generate_answer",
         lambda self, tenant, query, bm25_index=None, provider_overrides=None,
-        workspace="academic": FAKE_ANSWER,
+        workspace="academic", history=None: FAKE_ANSWER,
     )
     monkeypatch.setattr(
         "src.api.chat.persist_answer",

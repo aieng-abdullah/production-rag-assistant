@@ -20,6 +20,7 @@ class ProviderOverrides:
     to Config. Empty fields fall back to Config values.
     """
 
+    groq_model: str = ""
     anthropic_api_key: str = ""
     anthropic_model: str = ""
     openai_api_key: str = ""
@@ -38,7 +39,8 @@ def build_provider_chain(overrides: ProviderOverrides | None = None) -> list[Pro
     chain: list[Provider] = []
 
     if Config.GROQ_API_KEY:
-        chain.append(Provider("groq", Config.GROQ_API_KEY, Config.GROQ_MODEL))
+        groq_model = (overrides.groq_model if overrides else "") or Config.GROQ_MODEL
+        chain.append(Provider("groq", Config.GROQ_API_KEY, groq_model))
 
     anthropic_key = (overrides.anthropic_api_key if overrides else "") or Config.ANTHROPIC_API_KEY
     anthropic_model = (overrides.anthropic_model if overrides else "") or Config.ANTHROPIC_MODEL

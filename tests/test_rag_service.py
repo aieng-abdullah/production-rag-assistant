@@ -78,6 +78,7 @@ class TestGenerateAnswer:
             provider_overrides=overrides,
             tenant_id="tenant-a",
             workspace="academic",
+            history=None,
         )
         assert isinstance(result, CitedAnswer)
 
@@ -91,6 +92,20 @@ class TestGenerateAnswer:
         mock_generate.assert_called_once_with(
             "q", bm25, provider_overrides=None, tenant_id=DEFAULT_TENANT,
             workspace="academic",
+            history=None,
+        )
+
+    @patch("src.services.rag_service.generate")
+    def test_forwards_history(self, mock_generate, service):
+        mock_generate.return_value = CitedAnswer(answer="[SOURCE 1]", sources=[])
+        bm25 = MagicMock()
+        history = [{"role": "user", "content": "prior turn"}]
+
+        service.generate_answer("tenant-a", "follow up", bm25, history=history)
+
+        mock_generate.assert_called_once_with(
+            "follow up", bm25, provider_overrides=None, tenant_id="tenant-a",
+            workspace="academic", history=history,
         )
 
 
