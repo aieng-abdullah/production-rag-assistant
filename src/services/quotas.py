@@ -6,7 +6,10 @@ Atomic check+insert (`INSERT ... SELECT ... WHERE count < limit`) closes
 the check-then-act race under SQLite's single-writer lock. Guest tier
 (PLAN PR-6): accounts minted by ``POST /auth/anonymous`` carry an
 ``anon-…@local`` email and get the smaller guest limits (3 queries,
-1 document); everyone else keeps the member limits.
+1 document). Members get ``DAILY_QUERY_LIMIT``/``DOCUMENT_LIMIT``;
+a ``Subscription.tier = "pro"`` row (admin endpoint or Stripe webhook)
+multiplies both by ``TIER_MULTIPLIERS["pro"]`` (10x). Storage bytes
+share one cap across tiers.
 
 **Tier surface** (Streamlit single-process, PLAN PR-2a persistence):
 ``check_*_quota(user_id, tier) -> QuotaResult`` — free tier 1x, pro tier
@@ -28,7 +31,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import Config
 from src.db.database import get_session_factory as get_default_session_factory
-from src.db.models import Document, UsageEvent, User
+from src.db.models import Document, Subscription, UsageEvent, User
 from src.services.usage import get_daily_usage, get_document_count, record_usage
 
 __all__ = [
@@ -57,6 +60,7 @@ __all__ = [
     "reserve_verify_slot",
     "set_session_factory_override",
     "storage_bytes",
+    "tier_for",
 ]
 
 # --- Session surface constants (restored API) -------------------------------
@@ -110,16 +114,42 @@ def is_anonymous(session: Session, user_id: int) -> bool:
     return isinstance(email, str) and email.startswith(ANON_EMAIL_PREFIX)
 
 
+def tier_for(session: Session, user_id: int) -> str:
+    """Effective billing tier: ``"anonymous"`` (guest), ``"pro"`` or ``"free"``.
+
+    Reads the ``Subscription`` row written by the admin tier endpoint or the
+    Stripe webhook; guests never resolve to pro (their budget is the fixed
+    guest limit, not a multiplier of the member limit).
+    """
+    if is_anonymous(session, user_id):
+        return "anonymous"
+    tier = (
+        session.query(Subscription.tier).filter(Subscription.user_id == user_id).scalar()
+    )
+    return tier if tier in TIER_MULTIPLIERS else "free"
+
+
 def query_limit_for(session: Session, user_id: int) -> int:
-    """Daily query-unit budget for this account's tier."""
-    return ANON_QUERY_LIMIT if is_anonymous(session, user_id) else DAILY_QUERY_LIMIT
+    """Daily query-unit budget for this account's tier.
+
+    Pro multiplies the member limit by ``TIER_MULTIPLIERS`` (10x);
+    guests keep the fixed ``ANON_QUERY_LIMIT``.
+    """
+    tier = tier_for(session, user_id)
+    if tier == "anonymous":
+        return ANON_QUERY_LIMIT
+    return DAILY_QUERY_LIMIT * _get_multiplier(tier)
 
 
 def document_limit_for(session: Session, user_id: int) -> int:
-    """Document-count budget for this account's tier."""
-    return (
-        ANON_DOCUMENT_LIMIT if is_anonymous(session, user_id) else DOCUMENT_LIMIT
-    )
+    """Document-count budget for this account's tier (pro = 10x member).
+
+    Storage bytes are intentionally NOT multiplied — one shared cap.
+    """
+    tier = tier_for(session, user_id)
+    if tier == "anonymous":
+        return ANON_DOCUMENT_LIMIT
+    return DOCUMENT_LIMIT * _get_multiplier(tier)
 
 
 def _query_quota_error(limit: int) -> QuotaExceeded:
@@ -154,7 +184,7 @@ def _reserve_unit(session: Session, user_id: int, kind: str) -> int:
     Single statement: the WHERE clause re-evaluates the combined
     query+verify count at insert time, so concurrent requests cannot both
     slip past the limit. Raises QuotaExceeded when no row was inserted.
-    The budget is the caller's tier limit (guest vs member).
+    The budget is the caller's tier limit (guest / member / pro).
     """
     limit = query_limit_for(session, user_id)
     today = (

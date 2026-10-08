@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 import WorkspaceSwitch, { type Workspace } from "../components/WorkspaceSwitch";
+import { tierLabel } from "../utils/tier";
 
 interface Usage {
   tier: string;
@@ -60,11 +61,11 @@ export default function Settings() {
           <div>
             <strong className="settings-strong">User #{user?.id ?? "–"}</strong>
             <span className="metric-sub">
-              {usage?.tier === "anonymous"
-                ? "Guest session"
-                : usage?.tier === "member"
-                  ? "Member"
-                  : "…"}
+              {usage
+                ? usage.tier === "anonymous"
+                  ? "Guest session"
+                  : `${tierLabel(usage.tier)} plan`
+                : "…"}
             </span>
           </div>
           <button
