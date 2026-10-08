@@ -15,6 +15,8 @@ import json
 import os
 import re
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
@@ -43,6 +45,8 @@ from ragas.metrics._faithfulness import Faithfulness
 from src.config import Config
 from src.db.qdrant_client import load_all_chunks
 from src.generation.chain import generate
+from src.generation.schema import AnswerVerificationError
+from src.ingestion import embedder as _embedder
 from src.ingestion.embedder import _get_model as get_embedding_model
 from src.retrieval.bm25_index import build_bm25_index
 
@@ -62,9 +66,55 @@ METRIC_NAMES = tuple(THRESHOLDS)
 # Ground-truth metrics are meaningless for out-of-corpus/abstain samples.
 ABSTAIN_METRICS = ("faithfulness", "answer_relevancy")
 
+# The generation chain's internal repair loop fails on unlucky draws
+# (quote mismatches); a fresh sample usually verifies.
+GENERATE_ATTEMPTS = 3
+
 # Columns ragas consumes — extra bookkeeping keys are stripped before the
 # dataset is handed to `evaluate()`.
 RAGAS_INPUT_COLUMNS = ("question", "answer", "contexts", "ground_truth")
+
+# Voyage trial accounts allow 3 RPM on /embeddings. Retrieval query embeds
+# and the ragas answer-relevancy embeds share that pool and neither path
+# paces itself (embed_chunks paces only ingestion batches), so the eval run
+# serialises every embeddings API call through _post_embeddings.
+VOYAGE_EMBED_PACE_S = float(os.getenv("VOYAGE_EMBED_PACE_S", "21"))
+
+_pace_lock = threading.Lock()
+_pace_next_embed = 0.0
+_voyage_paced = False
+
+
+def wait_for_voyage_slot() -> None:
+    """Block until this process may make the next embeddings API call."""
+    global _pace_next_embed
+    with _pace_lock:
+        now = time.monotonic()
+        wait = _pace_next_embed - now
+        if wait > 0:
+            time.sleep(wait)
+            now = time.monotonic()
+        _pace_next_embed = now + VOYAGE_EMBED_PACE_S
+
+
+def install_voyage_pacing() -> None:
+    """Wrap the embeddings transport with the rate-limit slot waiter.
+
+    Installed from main() only — unit tests import this module but never
+    make API calls.
+    """
+    global _voyage_paced
+    if _voyage_paced:
+        return
+    original = _embedder._post_embeddings
+
+    def paced(*args: Any, **kwargs: Any) -> Any:
+        wait_for_voyage_slot()
+        return original(*args, **kwargs)
+
+    _embedder._post_embeddings = paced
+    _voyage_paced = True
+    logger.info(f"Voyage embedding pacing installed ({VOYAGE_EMBED_PACE_S}s/call)")
 
 _llm = None
 _embeddings = None
@@ -142,11 +192,23 @@ def resolve_workspace(item: Dict[str, Any], default_workspace: str) -> str:
 
 
 def run_rag(question: str, workspace: str) -> Dict[str, Any]:
-    cited_answer = generate(
-        query=question,
-        bm25_index=_get_pipeline(workspace),
-        workspace=workspace,
-    )
+    bm25_index = _get_pipeline(workspace)
+    cited_answer = None
+    for attempt in range(1, GENERATE_ATTEMPTS + 1):
+        try:
+            cited_answer = generate(
+                query=question,
+                bm25_index=bm25_index,
+                workspace=workspace,
+            )
+            break
+        except AnswerVerificationError as exc:
+            logger.warning(
+                f"generate() failed verification for {question[:60]!r} "
+                f"(attempt {attempt}/{GENERATE_ATTEMPTS}): {exc}"
+            )
+            if attempt == GENERATE_ATTEMPTS:
+                raise
     return {
         "answer": cited_answer.answer,
         "contexts": [source.text for source in cited_answer.sources],
@@ -159,16 +221,31 @@ def build_eval_samples(
     samples = []
     for item in eval_dataset:
         sample_workspace = resolve_workspace(item, workspace)
-        rag_output = run_rag(item["question"], workspace=sample_workspace)
-        samples.append({
+        sample = {
             "question": item["question"],
-            "answer": rag_output["answer"],
-            "contexts": rag_output["contexts"],
+            "answer": None,
+            "contexts": [],
             "ground_truth": item.get("ground_truth", ""),
             "workspace": sample_workspace,
             "class": item.get("class", "cite"),
-        })
-        logger.info(f"Sample created: {item['question'][:50]}")
+            "generation_error": None,
+        }
+        try:
+            rag_output = run_rag(item["question"], workspace=sample_workspace)
+        except AnswerVerificationError as exc:
+            # Corpus quirks (e.g. PDF hyphenation) can make quote verification
+            # fail deterministically — record the miss instead of aborting the
+            # whole run; the sample is excluded from metric means.
+            logger.error(
+                f"Generation failed after {GENERATE_ATTEMPTS} attempts "
+                f"for {item['question'][:60]!r}: {exc}"
+            )
+            sample["generation_error"] = str(exc)
+        else:
+            sample["answer"] = rag_output["answer"]
+            sample["contexts"] = rag_output["contexts"]
+            logger.info(f"Sample created: {item['question'][:50]}")
+        samples.append(sample)
     return samples
 
 
@@ -276,9 +353,13 @@ def evaluate_samples(samples: List[Dict[str, Any]], metrics: Sequence[str]) -> p
 
 def evaluate_dataset(samples: List[Dict[str, Any]]) -> Dict[str, float]:
     """Score cite samples on all metrics, abstain samples on non-ground-truth
-    metrics only, then combine into threshold-level means."""
-    scored = [sample for sample in samples if sample.get("class") != "abstain"]
-    abstain = [sample for sample in samples if sample.get("class") == "abstain"]
+    metrics only, then combine into threshold-level means.
+
+    Samples whose generation failed (no answer to judge) are excluded.
+    """
+    usable = [sample for sample in samples if not sample.get("generation_error")]
+    scored = [sample for sample in usable if sample.get("class") != "abstain"]
+    abstain = [sample for sample in usable if sample.get("class") == "abstain"]
     frames: List[pd.DataFrame] = []
     if scored:
         df = evaluate_samples(scored, METRIC_NAMES)
@@ -330,6 +411,7 @@ def per_sample_report(samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "ground_truth": sample["ground_truth"],
             "workspace": sample["workspace"],
             "class": sample["class"],
+            "generation_error": sample.get("generation_error"),
             "scores": sample.get("scores", {}),
         }
         for sample in samples
@@ -342,11 +424,13 @@ def save_results(
     per_sample: List[Dict[str, Any]],
     workspace: str,
     output_path: str,
+    generation_failure_count: int,
 ) -> None:
     report = {
         "workspace": workspace,
         "metric_scores": scores,
         "threshold_results": threshold_results,
+        "generation_failure_count": generation_failure_count,
         "per_sample": per_sample,
     }
     with open(output_path, "w", encoding="utf-8") as f:
@@ -367,14 +451,21 @@ def parse_args(argv: Sequence[str] | None = None):
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    install_voyage_pacing()
     Config.validate()
     logger.info(f"Starting RAG evaluation (default workspace={args.workspace})")
     eval_dataset = load_eval_dataset(EVAL_DATASET_PATH)
     samples = build_eval_samples(eval_dataset, workspace=args.workspace)
+    failures = [s for s in samples if s.get("generation_error")]
     scores = evaluate_dataset(samples)
     threshold_results = check_thresholds(scores)
     save_results(
-        scores, threshold_results, per_sample_report(samples), args.workspace, RESULTS_PATH
+        scores,
+        threshold_results,
+        per_sample_report(samples),
+        args.workspace,
+        RESULTS_PATH,
+        generation_failure_count=len(failures),
     )
 
     print("\n==============================")
@@ -385,6 +476,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{metric}: {result['score']:.4f} "
             f"(threshold={result['threshold']}) => {result['status']}"
         )
+    if failures:
+        print(f"Generation failures excluded from scores: {len(failures)}")
     failed = gates_failed(threshold_results)
     if failed:
         print(f"FAILED gates: {', '.join(failed)}")

@@ -227,3 +227,48 @@ class TestCliAndDatasetLoading:
         path.write_text(json.dumps([{"ground_truth": "gt"}]))
         with pytest.raises(ValueError, match="missing 'question'"):
             load_eval_dataset(str(path))
+
+
+class TestGenerationFailureHandling:
+    def test_build_eval_samples_records_failure_and_continues(self, monkeypatch):
+        from src.generation.schema import AnswerVerificationError
+
+        import eval.eval_runner as runner
+
+        calls = []
+
+        def fake_run_rag(question, workspace):
+            calls.append(question)
+            if question == "bad?":
+                raise AnswerVerificationError("quote_not_found")
+            return {"answer": "a", "contexts": ["c"]}
+
+        monkeypatch.setattr(runner, "run_rag", fake_run_rag)
+        dataset = [
+            {"question": "bad?", "ground_truth": "gt1"},
+            {"question": "good?", "ground_truth": "gt2"},
+        ]
+        samples = runner.build_eval_samples(dataset, "academic")
+        assert len(calls) == 2
+        assert samples[0]["answer"] is None
+        assert "quote_not_found" in samples[0]["generation_error"]
+        assert samples[1]["answer"] == "a"
+        assert samples[1]["generation_error"] is None
+
+    def test_evaluate_dataset_excludes_failed_samples(self, monkeypatch):
+        import eval.eval_runner as runner
+
+        def fake_evaluate(samples, metrics):
+            assert len(samples) == 1
+            assert samples[0]["question"] == "good?"
+            return pd.DataFrame({metric: [0.9] for metric in metrics})
+
+        monkeypatch.setattr(runner, "evaluate_samples", fake_evaluate)
+        good = {
+            "question": "good?", "answer": "a", "contexts": ["c"],
+            "ground_truth": "gt", "workspace": "academic", "class": "cite",
+            "generation_error": None,
+        }
+        bad = {**good, "question": "bad?", "generation_error": "boom"}
+        scores = runner.evaluate_dataset([good, bad])
+        assert scores == {metric: pytest.approx(0.9) for metric in THRESHOLDS}
