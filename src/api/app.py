@@ -66,6 +66,12 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(answers_router)
     app.include_router(usage_router)
+    # Admin routes exist only when ADMIN_EMAILS is configured — flag-off
+    # deployments must never expose /admin (fail-closed, same pattern as billing).
+    if Config.ADMIN_EMAILS:
+        from src.api.admin import router as admin_router
+
+        app.include_router(admin_router)
     # PLAN PR-5: billing routes exist only when the Stripe flag is on —
     # flag-off deployments must never expose /billing or /webhooks.
     if Config.STRIPE_SECRET_KEY:
