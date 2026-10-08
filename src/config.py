@@ -31,6 +31,11 @@ class Config:
     QDRANT_URL = os.getenv("QDRANT_URL", "")
     QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
+    # --- Admin ---
+    ADMIN_EMAILS: list[str] = [
+        e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
+    ]
+
     # --- Relational DB (users, auth, quotas — PLAN PR-2a) ---
     # SQLite by default (local dev + tests); set DATABASE_URL to Postgres in prod.
     DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'data' / 'app.db'}")

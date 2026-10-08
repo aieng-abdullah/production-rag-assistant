@@ -1,9 +1,12 @@
+import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
+import { ApiError, api } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
 import { ToastProvider } from "./components/Toast";
+import Admin from "./pages/Admin";
 import AuthCallback from "./pages/AuthCallback";
 import Chat from "./pages/Chat";
 import Dashboard from "./pages/Dashboard";
@@ -22,9 +25,46 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** Probe /admin/stats once per session: Admin link only for allow-listed accounts. */
+function useIsAdmin(): boolean {
+  const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(
+    () => user !== null && sessionStorage.getItem(`gai.is_admin.${user.id}`) === "1",
+  );
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    const key = `gai.is_admin.${user.id}`;
+    const cached = sessionStorage.getItem(key);
+    if (cached !== null) {
+      setIsAdmin(cached === "1");
+      return;
+    }
+    api("/admin/stats")
+      .then(() => {
+        sessionStorage.setItem(key, "1");
+        setIsAdmin(true);
+      })
+      .catch((error) => {
+        // Cache only positive hits: a "0" would go stale when the operator
+        // adds/removes ADMIN_EMAILS (sessionStorage outlives the change).
+        // Non-admins re-probe once per page load; backend stays authoritative.
+        if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+          sessionStorage.removeItem(key);
+        }
+        setIsAdmin(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  return isAdmin;
+}
+
 function Nav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   return (
     <header className="nav">
       <div className="nav-inner">
@@ -38,6 +78,7 @@ function Nav() {
           {user && <Link className="nav-wide" to="/documents">Documents</Link>}
           {user && <Link className="nav-wide" to="/dashboard">Dashboard</Link>}
           {user && <Link className="nav-wide" to="/settings">Settings</Link>}
+          {user && isAdmin && <Link to="/admin">Admin</Link>}
           {user ? (
             <button
               className="btn btn-ghost nav-btn"
@@ -108,6 +149,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <Billing />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth>
+                <Admin />
               </RequireAuth>
             }
           />
