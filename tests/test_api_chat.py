@@ -10,7 +10,7 @@ from src.api.app import create_app
 from src.api.security import create_token
 from src.config import Config
 from src.db.database import Base, get_engine, reset_engine, session_scope
-from src.db.models import UsageEvent
+from src.db.models import Subscription, UsageEvent, User
 from src.generation.Citation_system import CitedAnswer, Source
 from src.services import RAGService
 from src.services.bm25_cache import clear_all
@@ -228,12 +228,51 @@ def test_usage_shape_and_auth(client, headers):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["tier"] == "free"
     assert body["queries"] == {"used": 0, "limit": 20}
     assert body["documents"] == {"used": 0, "limit": 5}
     assert body["storage"] == {
         "used_bytes": 0,
         "limit_bytes": 100 * 1024 * 1024,
     }
+
+
+def _grant_pro() -> None:
+    """Admin tier endpoint / Stripe webhook equivalent for user id 1."""
+    with session_scope() as session:
+        session.add(
+            User(
+                id=1,
+                email="pro@example.com",
+                name="Pro User",
+                google_sub="sub-pro-user",
+            )
+        )
+        session.add(Subscription(user_id=1, tier="pro", status="active"))
+
+
+def test_usage_reports_pro_tier_and_scaled_limits(client, headers):
+    _grant_pro()
+
+    body = client.get("/usage", headers=headers).json()
+
+    assert body["tier"] == "pro"
+    assert body["queries"]["limit"] == 200  # 20 * 10
+    assert body["documents"]["limit"] == 50  # 5 * 10
+    # Storage is a shared cap — not multiplied by tier.
+    assert body["storage"]["limit_bytes"] == 100 * 1024 * 1024
+
+
+def test_chat_succeeds_past_free_limit_when_pro(client, headers, monkeypatch):
+    """20 seeded units exhaust the free tier; pro must still answer."""
+    _fake_generate(monkeypatch)
+    _seed_query_events(20)
+    _grant_pro()
+
+    response = client.post("/chat", json={"query": "q"}, headers=headers)
+
+    assert response.status_code == 200
+    assert client.get("/usage", headers=headers).json()["queries"]["used"] == 22
 
 
 def test_usage_requires_auth(client):

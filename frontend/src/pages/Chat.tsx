@@ -38,6 +38,7 @@ type Message =
       role: "assistant";
       loading?: boolean;
       failed?: string;
+      quotaExceeded?: boolean;
       answer?: string;
       sources?: Source[];
       verification?: Verification;
@@ -76,10 +77,12 @@ function renderAnswer(text: string) {
         key={index}
         className="cite-chip"
         onClick={() => {
-          document.getElementById(`source-${match[1]}`)?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
+          const target = document.getElementById(`source-${match[1]}`);
+          if (!target) return;
+          target.closest("details")?.setAttribute("open", "");
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.add("src-flash");
+          window.setTimeout(() => target.classList.remove("src-flash"), 1500);
         }}
         role="button"
         tabIndex={0}
@@ -108,6 +111,7 @@ export default function Chat() {
   });
   const [usage, setUsage] = useState<Usage | null>(null);
   const [traceId, setTraceId] = useState<number | null>(null);
+  const [waitSeconds, setWaitSeconds] = useState(0);
   const busy = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -176,6 +180,31 @@ export default function Chat() {
     });
   }, [messages]);
 
+  const waiting = messages.some(
+    (message) => message.role === "assistant" && Boolean(message.loading),
+  );
+
+  useEffect(() => {
+    if (!waiting) {
+      setWaitSeconds(0);
+      return;
+    }
+    setWaitSeconds(0);
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setWaitSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
+
+  useEffect(() => {
+    if (!waiting || waitSeconds !== 5) return;
+    threadRef.current?.scrollTo({
+      top: threadRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [waiting, waitSeconds]);
+
   async function send(raw: string) {
     const query = raw.trim();
     if (!query || busy.current) return;
@@ -206,12 +235,11 @@ export default function Chat() {
       recordHistory(query, response.verification.status);
       void refreshUsage();
     } catch (error) {
+      const isQuota = error instanceof ApiError && error.status === 429;
       const message =
         error instanceof ApiError ? error.message : "Something went wrong";
       if (error instanceof ApiError && error.status === 0) {
         toast("Backend is waking up (cold start). Try again shortly.", "error");
-      } else if (error instanceof ApiError && error.status === 429) {
-        toast(message, "error");
       } else {
         toast(message, "error");
       }
@@ -220,9 +248,11 @@ export default function Chat() {
         next[next.length - 1] = {
           role: "assistant",
           failed: message,
+          quotaExceeded: isQuota,
         };
         return next;
       });
+      void refreshUsage();
     } finally {
       busy.current = false;
     }
@@ -242,6 +272,7 @@ export default function Chat() {
 
   const remaining =
     usage !== null ? Math.max(usage.queries.limit - usage.queries.used, 0) : null;
+  const quotaExhausted = remaining !== null && remaining <= 0;
 
   return (
     <main className="chat-page shell" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
@@ -284,22 +315,40 @@ export default function Chat() {
               <p>{message.content}</p>
             </div>
           ) : message.loading ? (
-            <div className="msg msg-ai msg-loading" key={index}>
-              <div className="thinking-dots" aria-label="Thinking">
+            <div
+              className="msg msg-ai msg-loading"
+              key={index}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="thinking-dots" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
-              <p>Thinking through your documents…</p>
+              <p>
+                Thinking through your documents…{" "}
+                <span className="msg-wait-count">{waitSeconds}s</span>
+                {waitSeconds >= 5 && (
+                  <span className="msg-wait-hint">
+                    First request after idle can take up to a minute.
+                  </span>
+                )}
+              </p>
             </div>
           ) : message.failed ? (
             <div className="msg msg-ai msg-failed" key={index}>
               <p>
-                I hit an error while generating that answer. Please try again.
+                {message.quotaExceeded
+                  ? message.failed
+                  : "I hit an error while generating that answer. Please try again."}
               </p>
-              <span className="msg-error-detail">{message.failed}</span>
+              {!message.quotaExceeded && (
+                <span className="msg-error-detail">{message.failed}</span>
+              )}
               <button
                 className="starter retry-btn"
+                disabled={quotaExhausted}
                 onClick={() => {
                   const question = lastQuestion();
                   setMessages((current) => current.slice(0, -1));
@@ -414,7 +463,11 @@ export default function Chat() {
         <button
           type="submit"
           className="btn btn-primary chat-send"
-          disabled={!input.trim() || Boolean(messages.find((m) => m.role === "assistant" && "loading" in m && m.loading))}
+          disabled={
+            !input.trim() ||
+            quotaExhausted ||
+            Boolean(messages.find((m) => m.role === "assistant" && "loading" in m && m.loading))
+          }
         >
           Ask
         </button>
@@ -422,6 +475,12 @@ export default function Chat() {
 
       {remaining !== null && remaining <= 2 && remaining > 0 && (
         <p className="chat-quota-warn">Only {remaining} queries left today.</p>
+      )}
+
+      {remaining !== null && remaining === 0 && (
+        <p className="chat-quota-warn chat-quota-empty" role="status">
+          Daily quota reached — resets 00:00 UTC.
+        </p>
       )}
 
       {traceId !== null && <TraceModal answerId={traceId} onClose={() => setTraceId(null)} />}
