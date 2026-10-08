@@ -50,13 +50,18 @@ class RAGService:
         bm25_index,
         provider_overrides: ProviderOverrides | None = None,
         workspace: str = Config.DEFAULT_WORKSPACE,
+        history: list[dict] | None = None,
     ) -> CitedAnswer:
-        """Generate a citation-validated answer scoped to `tenant_id` + `workspace`."""
+        """Generate a citation-validated answer scoped to `tenant_id` + `workspace`.
+
+        `history` (optional) carries prior sanitized chat turns so the
+        pipeline can rewrite follow-ups and ground the prompt in context."""
         logger.debug(
-            "Query tenant={} workspace={} prompt={}",
+            "Query tenant={} workspace={} prompt={} history_turns={}",
             tenant_id,
             workspace,
             get_prompt_version(workspace),
+            len(history or []),
         )
         return generate(
             query,
@@ -64,6 +69,7 @@ class RAGService:
             provider_overrides=provider_overrides,
             tenant_id=tenant_id,
             workspace=workspace,
+            history=history,
         )
 
     def list_documents(self, tenant_id: str) -> list[str]:

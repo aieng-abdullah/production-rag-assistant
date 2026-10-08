@@ -390,7 +390,7 @@ class TestGenerate:
         bm25 = MagicMock()
         result = generate("query", bm25)
         mock_pipeline.assert_called_once_with(
-            "query", bm25, None, "default", workspace="academic"
+            "query", bm25, None, "default", workspace="academic", history=None
         )
         assert isinstance(result, CitedAnswer)
 
@@ -409,7 +409,8 @@ class TestGenerate:
         bm25 = MagicMock()
         result = generate("query", bm25)
         mock_traced.assert_called_once_with(
-            "query", bm25, mock_lf.return_value, None, "default", workspace="academic"
+            "query", bm25, mock_lf.return_value, None, "default",
+            workspace="academic", history=None,
         )
         assert isinstance(result, CitedAnswer)
 
@@ -433,10 +434,11 @@ class TestGenerate:
         bm25 = MagicMock()
         result = generate("query", bm25)
         mock_traced.assert_called_once_with(
-            "query", bm25, mock_lf.return_value, None, "default", workspace="academic"
+            "query", bm25, mock_lf.return_value, None, "default",
+            workspace="academic", history=None,
         )
         mock_pipeline.assert_called_once_with(
-            "query", bm25, None, "default", workspace="academic"
+            "query", bm25, None, "default", workspace="academic", history=None
         )
         assert isinstance(result, CitedAnswer)
 
@@ -506,3 +508,136 @@ class TestInvokeLlmFailover:
         answer, usage = _invoke_llm("prompt")
         assert answer == "answer [SOURCE 1]"
         assert mock_call.call_count == 1
+
+
+class TestPipelineHistory:
+    """Multi-turn wiring: retrieval runs on the rewritten query, the prompt
+    carries the conversation block, and a broken rewrite never blocks."""
+
+    HISTORY = [
+        {"role": "user", "content": "compare the two notice clauses"},
+        {"role": "assistant", "content": "Clause 8 has 30 days."},
+    ]
+
+    @patch("src.generation.chain.rewrite_query")
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_retrieval_runs_on_rewritten_query(
+        self, mock_llm, mock_retrieval, mock_rewrite
+    ):
+        chunks = [{"text": "chunk text", "doc_id": "d1", "page_num": 1}]
+        mock_retrieval.return_value = chunks
+        mock_llm.return_value = (_json_answer(), None)
+        mock_rewrite.return_value = "notice clauses comparison 30 days"
+
+        result = _run_pipeline(
+            "what about the second one?", MagicMock(), history=self.HISTORY
+        )
+
+        assert mock_rewrite.call_count == 1
+        assert mock_retrieval.call_args[0][0] == "notice clauses comparison 30 days"
+        assert isinstance(result, CitedAnswer)
+
+    @patch("src.generation.chain.rewrite_query")
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_prompt_carries_original_query_and_history(
+        self, mock_llm, mock_retrieval, mock_rewrite
+    ):
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 1}
+        ]
+        mock_llm.return_value = (_json_answer(), None)
+        mock_rewrite.return_value = "rewritten for retrieval"
+
+        _run_pipeline(
+            "what about the second one?", MagicMock(), history=self.HISTORY
+        )
+
+        prompt = mock_llm.call_args[0][0]
+        assert "<conversation>" in prompt
+        assert "user: compare the two notice clauses" in prompt
+        assert "what about the second one?" in prompt
+
+    @patch("src.generation.chain.rewrite_query")
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_no_history_skips_rewrite(
+        self, mock_llm, mock_retrieval, mock_rewrite
+    ):
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 1}
+        ]
+        mock_llm.return_value = (_json_answer(), None)
+
+        _run_pipeline("plain standalone question", MagicMock())
+
+        mock_rewrite.assert_not_called()
+        assert mock_retrieval.call_args[0][0] == "plain standalone question"
+
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_rewrite_failure_falls_back_to_original_query(
+        self, mock_llm, mock_retrieval
+    ):
+        """The rewrite's LLM call dies → retrieval still gets the raw query
+        and the answer still ships (rewrite never fails the request)."""
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 1}
+        ]
+        mock_llm.side_effect = [
+            RuntimeError("rewrite providers down"),
+            (_json_answer(), None),
+        ]
+
+        result = _run_pipeline(
+            "what about the second one?", MagicMock(), history=self.HISTORY
+        )
+
+        assert isinstance(result, CitedAnswer)
+        assert mock_retrieval.call_args[0][0] == "what about the second one?"
+
+    @patch("src.generation.chain.rewrite_query")
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_trace_counts_history_turns(
+        self, mock_llm, mock_retrieval, mock_rewrite
+    ):
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 1}
+        ]
+        mock_llm.return_value = (_json_answer(), None)
+        mock_rewrite.return_value = "rewritten"
+
+        result = _run_pipeline("q", MagicMock(), history=self.HISTORY)
+
+        assert result.trace["history_turns"] == 2
+
+    @patch("src.generation.chain.rewrite_query")
+    @patch("src.generation.chain.retrieval")
+    @patch("src.generation.chain._invoke_llm")
+    def test_trace_without_history_reports_zero(
+        self, mock_llm, mock_retrieval, mock_rewrite
+    ):
+        mock_retrieval.return_value = [
+            {"text": "chunk text", "doc_id": "d1", "page_num": 1}
+        ]
+        mock_llm.return_value = (_json_answer(), None)
+
+        result = _run_pipeline("q", MagicMock())
+
+        assert result.trace["history_turns"] == 0
+
+    @patch("src.generation.chain._run_pipeline")
+    @patch("src.generation.chain.get_langfuse_client")
+    def test_generate_forwards_history(self, mock_lf, mock_pipeline):
+        mock_lf.return_value = None
+        mock_pipeline.return_value = CitedAnswer(answer="[SOURCE 1]", sources=[])
+        history = [{"role": "user", "content": "prior"}]
+        bm25 = MagicMock()
+
+        generate("follow up", bm25, history=history)
+
+        mock_pipeline.assert_called_once_with(
+            "follow up", bm25, None, "default", workspace="academic", history=history
+        )

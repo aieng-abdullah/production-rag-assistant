@@ -28,6 +28,7 @@ from src.generation.verifier import (
     judge_claims,
 )
 from src.generation.profiles import get_prompt_version
+from src.generation.query_rewrite import rewrite_query
 from src.generation.providers import (
     Provider,
     ProviderOverrides,
@@ -177,6 +178,7 @@ def _trace_payload(
     structured: StructuredAnswer,
     verifications: list[ClaimVerification],
     usage: dict[str, int] | None,
+    history_turns: int = 0,
 ) -> dict:
     """Provenance record persisted with the answer (PLAN PR-4b-iii)."""
     cited_ids = {
@@ -187,6 +189,7 @@ def _trace_payload(
         "prompt_version": get_prompt_version(workspace),
         "model": Config.GROQ_MODEL,
         "verify_model": Config.VERIFY_MODEL,
+        "history_turns": history_turns,
         "token_usage": usage,
         "chunks": [
             {
@@ -248,18 +251,34 @@ def _call_provider_with_retry(
     return client.invoke(prompt, config=config)
 
 
+def _search_query(
+    query: str,
+    history: list[dict] | None,
+    tenant_id: str,
+) -> str:
+    """Query handed to retrieval: rewritten standalone with history,
+    untouched (zero added latency) without it."""
+    if not history:
+        return query
+    return rewrite_query(query, history, tenant_id=tenant_id)
+
+
 def _run_pipeline(
     query: str,
     bm25_index,
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
     workspace: str = Config.DEFAULT_WORKSPACE,
+    history: list[dict] | None = None,
 ) -> CitedAnswer:
     """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
-    top_chunks = retrieval(query, bm25_index, tenant_id=tenant_id, workspace=workspace)
+    search_query = _search_query(query, history, tenant_id)
+    top_chunks = retrieval(search_query, bm25_index, tenant_id=tenant_id, workspace=workspace)
     logger.debug(f"Retrieved {len(top_chunks)} top chunks")
 
-    citation_prompt = build_citation_prompt(query, top_chunks, workspace=workspace)
+    citation_prompt = build_citation_prompt(
+        query, top_chunks, workspace=workspace, history=history
+    )
     logger.debug(f"Generated citation prompt: {citation_prompt}")
 
     structured, verifications, _usage = _generate_verified(
@@ -272,7 +291,14 @@ def _run_pipeline(
         answer=answer_text,
         sources=sources,
         verification=build_verification(structured, verifications),
-        trace=_trace_payload(workspace, top_chunks, structured, verifications, _usage),
+        trace=_trace_payload(
+            workspace,
+            top_chunks,
+            structured,
+            verifications,
+            _usage,
+            history_turns=len(history or []),
+        ),
     )
 
 
@@ -283,6 +309,7 @@ def _generate_traced(
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
     workspace: str = Config.DEFAULT_WORKSPACE,
+    history: list[dict] | None = None,
 ) -> CitedAnswer:
     """Run the RAG pipeline with Langfuse tracing spans around each step."""
     from langfuse.langchain import CallbackHandler
@@ -293,6 +320,7 @@ def _generate_traced(
     trace_context: dict[str, str] = {"trace_id": trace_id}
 
     t0 = monotonic()
+    search_query = _search_query(query, history, tenant_id)
 
     # Helper to redact sensitive data based on debug mode
     def _safe(data: Any) -> Any:
@@ -311,6 +339,7 @@ def _generate_traced(
                 ),
                 "tenant_id": tenant_id,
                 "workspace": workspace,
+                "history_turns": len(history or []),
             }),
             metadata={"groq_model": Config.GROQ_MODEL},
         ) as root:
@@ -319,14 +348,14 @@ def _generate_traced(
                 name="retrieval",
                 as_type="retriever",
                 input=_safe({
-                    "query": query,
+                    "query": search_query,
                     "corpus_chunk_count": count_chunks(
                         tenant_id=tenant_id, workspace=workspace
                     ),
                 }),
             ) as retr:
                 top_chunks = retrieval(
-                    query,
+                    search_query,
                     bm25_index,
                     lf_retrieval_parent=retr,
                     tenant_id=tenant_id,
@@ -341,7 +370,7 @@ def _generate_traced(
                 as_type="span",
             ) as pb:
                 citation_prompt = build_citation_prompt(
-                    query, top_chunks, workspace=workspace
+                    query, top_chunks, workspace=workspace, history=history
                 )
                 logger.debug(f"Generated citation prompt: {citation_prompt}")
                 pb.update(output=_safe({"prompt_chars": len(citation_prompt)}))
@@ -402,7 +431,12 @@ def _generate_traced(
                 sources=sources,
                 verification=verification,
                 trace=_trace_payload(
-                    workspace, top_chunks, structured, verifications, usage
+                    workspace,
+                    top_chunks,
+                    structured,
+                    verifications,
+                    usage,
+                    history_turns=len(history or []),
                 ),
             )
 
@@ -428,21 +462,25 @@ def generate(
     provider_overrides: ProviderOverrides | None = None,
     tenant_id: str = DEFAULT_TENANT,
     workspace: str = Config.DEFAULT_WORKSPACE,
+    history: list[dict] | None = None,
 ) -> CitedAnswer:
     """Generate a cited answer for the given query using the RAG pipeline."""
     # Check if tracing is enabled and we should sample this request
     if not langfuse_enabled() or not should_trace_request():
         return _run_pipeline(
-            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+            query, bm25_index, provider_overrides, tenant_id,
+            workspace=workspace, history=history,
         )
     lf = get_langfuse_client()
     if lf is None:
         return _run_pipeline(
-            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+            query, bm25_index, provider_overrides, tenant_id,
+            workspace=workspace, history=history,
         )
     try:
         return _generate_traced(
-            query, bm25_index, lf, provider_overrides, tenant_id, workspace=workspace
+            query, bm25_index, lf, provider_overrides, tenant_id,
+            workspace=workspace, history=history,
         )
     except ImportError as exc:
         # Tracing is non-critical: a broken/partial Langfuse integration must
@@ -453,5 +491,6 @@ def generate(
             exc,
         )
         return _run_pipeline(
-            query, bm25_index, provider_overrides, tenant_id, workspace=workspace
+            query, bm25_index, provider_overrides, tenant_id,
+            workspace=workspace, history=history,
         )
