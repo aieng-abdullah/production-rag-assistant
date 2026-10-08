@@ -45,6 +45,7 @@ from ragas.metrics._faithfulness import Faithfulness
 from src.config import Config
 from src.db.qdrant_client import load_all_chunks
 from src.generation.chain import generate
+from src.generation.schema import AnswerVerificationError
 from src.ingestion import embedder as _embedder
 from src.ingestion.embedder import _get_model as get_embedding_model
 from src.retrieval.bm25_index import build_bm25_index
@@ -64,6 +65,10 @@ METRIC_NAMES = tuple(THRESHOLDS)
 
 # Ground-truth metrics are meaningless for out-of-corpus/abstain samples.
 ABSTAIN_METRICS = ("faithfulness", "answer_relevancy")
+
+# The generation chain's internal repair loop fails on unlucky draws
+# (quote mismatches); a fresh sample usually verifies.
+GENERATE_ATTEMPTS = 3
 
 # Columns ragas consumes — extra bookkeeping keys are stripped before the
 # dataset is handed to `evaluate()`.
@@ -187,11 +192,23 @@ def resolve_workspace(item: Dict[str, Any], default_workspace: str) -> str:
 
 
 def run_rag(question: str, workspace: str) -> Dict[str, Any]:
-    cited_answer = generate(
-        query=question,
-        bm25_index=_get_pipeline(workspace),
-        workspace=workspace,
-    )
+    bm25_index = _get_pipeline(workspace)
+    cited_answer = None
+    for attempt in range(1, GENERATE_ATTEMPTS + 1):
+        try:
+            cited_answer = generate(
+                query=question,
+                bm25_index=bm25_index,
+                workspace=workspace,
+            )
+            break
+        except AnswerVerificationError as exc:
+            logger.warning(
+                f"generate() failed verification for {question[:60]!r} "
+                f"(attempt {attempt}/{GENERATE_ATTEMPTS}): {exc}"
+            )
+            if attempt == GENERATE_ATTEMPTS:
+                raise
     return {
         "answer": cited_answer.answer,
         "contexts": [source.text for source in cited_answer.sources],
