@@ -114,7 +114,9 @@ export default function Chat() {
   const [waitSeconds, setWaitSeconds] = useState(0);
   const busy = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   function handleDragOver(event: React.DragEvent) {
     event.preventDefault();
@@ -134,14 +136,32 @@ export default function Chat() {
     setDragOver(false);
     const file = event.dataTransfer.files?.[0];
     if (!file) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    if (!isPdf(file)) {
       toast("Only PDF files can be uploaded.", "error");
       return;
     }
     await uploadFile(file);
   }
 
+  function isPdf(file: File): boolean {
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  }
+
+  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Reset so picking the same file again re-fires onChange.
+    event.target.value = "";
+    if (!file) return;
+    if (!isPdf(file)) {
+      toast("Only PDF files can be uploaded.", "error");
+      return;
+    }
+    void uploadFile(file);
+  }
+
   async function uploadFile(file: File) {
+    if (uploading) return;
+    setUploading(true);
     toast(`Indexing ${file.name}…`, "info");
     try {
       const form = new FormData();
@@ -151,13 +171,15 @@ export default function Chat() {
         "/documents",
         form
       );
-      toast(`${created.filename} indexed. Ask about it.`, "success");
+      toast(`${created.filename} uploaded — indexing…`, "success");
       void refreshUsage();
     } catch (error) {
       toast(
         error instanceof ApiError ? error.message : "Upload failed",
         "error"
       );
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -453,6 +475,32 @@ export default function Chat() {
           void send(input);
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="chat-attach-input"
+          onChange={handleFileSelected}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          className="chat-attach"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          aria-label="Add a PDF document"
+          title="Add a PDF document"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path
+              d="M9 3.75v10.5M3.75 9h10.5"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
