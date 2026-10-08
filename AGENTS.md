@@ -26,6 +26,17 @@ python3 eval/eval_runner.py
 cd frontend && npm run build
 ```
 
+### Quality gates (local-only)
+
+Before pushing changes to `src/retrieval/**` or `src/generation/**`, run both evals from the repo root (requires GROQ/VOYAGE/QDRANT keys in `.env`):
+
+```bash
+python3 eval/eval_runner.py      # RAGAS metric thresholds → results.json
+python3 eval/verify_eval.py      # deterministic citation gates → verify_results.json
+```
+
+Both must exit 0. The committed `results.json` / `verify_results.json` are the baseline — refresh and commit them with the change. Eval is LOCAL-ONLY: it is not run in CI.
+
 ## System Architecture
 
 Two-tier: FastAPI backend + React SPA frontend. No monorepo.
