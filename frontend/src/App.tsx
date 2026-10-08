@@ -65,37 +65,99 @@ function Nav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
+  const signOut = () => {
+    closeMenu();
+    logout();
+    navigate("/", { replace: true });
+  };
   return (
     <header className="nav">
       <div className="nav-inner">
-        <Link to="/" className="brand">
+        <Link to="/" className="brand" onClick={closeMenu}>
           Grounded<span>AI</span>
         </Link>
-        <nav>
-          <Link to="/">Product</Link>
-          <Link className="nav-about" to="/#about">About</Link>
-          {user && <Link to="/chat">Chat</Link>}
-          {user && <Link className="nav-wide" to="/documents">Documents</Link>}
-          {user && <Link className="nav-wide" to="/dashboard">Dashboard</Link>}
-          {user && <Link className="nav-wide" to="/settings">Settings</Link>}
-          {user && isAdmin && <Link to="/admin">Admin</Link>}
-          {user ? (
-            <button
-              className="btn btn-ghost nav-btn"
-              onClick={() => {
-                logout();
-                navigate("/", { replace: true });
-              }}
+        <div className="nav-actions">
+          <nav>
+            <Link to="/">Product</Link>
+            <Link className="nav-about" to="/#about">About</Link>
+            {user && <Link to="/chat">Chat</Link>}
+            {user && <Link className="nav-wide" to="/documents">Documents</Link>}
+            {user && <Link className="nav-wide" to="/dashboard">Dashboard</Link>}
+            {user && <Link className="nav-wide" to="/settings">Settings</Link>}
+            {user && isAdmin && <Link to="/admin">Admin</Link>}
+            {user ? (
+              <button
+                className="btn btn-ghost nav-btn"
+                onClick={() => {
+                  logout();
+                  navigate("/", { replace: true });
+                }}
+              >
+                Sign out
+              </button>
+            ) : (
+              <Link className="btn btn-primary nav-btn" to="/login">
+                Sign in
+              </Link>
+            )}
+          </nav>
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={menuOpen}
+            aria-controls="nav-menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              aria-hidden="true"
+              focusable="false"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
             >
+              {menuOpen ? (
+                <>
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6L6 18" />
+                </>
+              ) : (
+                <>
+                  <path d="M4 7h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 17h16" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
+      </div>
+      {menuOpen && (
+        <nav id="nav-menu" className="nav-menu">
+          <Link to="/" onClick={closeMenu}>Product</Link>
+          <Link to="/#about" onClick={closeMenu}>About</Link>
+          {user && <Link to="/chat" onClick={closeMenu}>Chat</Link>}
+          {user && <Link to="/documents" onClick={closeMenu}>Documents</Link>}
+          {user && <Link to="/dashboard" onClick={closeMenu}>Dashboard</Link>}
+          {user && <Link to="/settings" onClick={closeMenu}>Settings</Link>}
+          {user && isAdmin && <Link to="/admin" onClick={closeMenu}>Admin</Link>}
+          {user ? (
+            <button className="btn btn-ghost" onClick={signOut}>
               Sign out
             </button>
           ) : (
-            <Link className="btn btn-primary nav-btn" to="/login">
+            <Link className="btn btn-primary" to="/login" onClick={closeMenu}>
               Sign in
             </Link>
           )}
         </nav>
-      </div>
+      )}
     </header>
   );
 }

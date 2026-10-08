@@ -14,10 +14,11 @@
 
   --ink-1: #17211d;
   --ink-2: #5c6660;
-  --ink-3: #97a09a;
+  --ink-3: #67716b;
   --ink-4: #c2c8c1;
 
   --accent: #46654f;
+  --accent-2: #6b8f71;
 
   --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
@@ -165,8 +166,8 @@ h1, h2, h3 {
 }
 .brand:hover { opacity: 1; }
 .brand span { color: var(--accent); }
-.nav nav { display: flex; gap: 28px; align-items: center; }
-.nav nav a:not(.btn) {
+.nav-inner nav { display: flex; gap: 28px; align-items: center; }
+.nav-inner nav a:not(.btn) {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -175,6 +176,46 @@ h1, h2, h3 {
   transition: opacity 0.2s ease;
 }
 .nav .btn { padding: 0.55rem 1.1rem; }
+
+.nav-actions { display: flex; align-items: center; gap: 14px; }
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.nav-toggle:hover { background: var(--paper-2); border-color: var(--border); }
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 6px 24px 18px;
+  border-top: 1px solid var(--hairline);
+  background: var(--paper);
+}
+.nav-menu a:not(.btn) {
+  display: block;
+  padding: 13px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-1);
+  border-bottom: 1px solid var(--hairline);
+}
+.nav-menu a:not(.btn):hover { opacity: 0.62; }
+.nav-menu .btn { align-self: flex-start; margin-top: 14px; }
 
 .footer {
   margin: 5rem 0 3rem;
@@ -867,6 +908,7 @@ h1, h2, h3 {
 
 @media (max-width: 720px) {
   .nav-inner { padding: 0 24px; }
+  .nav-toggle { display: inline-flex; }
   .hero { padding: 72px 0 56px; }
   .hero-ctas { flex-direction: column; }
   .demo { padding: 1.5rem 1.3rem; }
@@ -887,7 +929,7 @@ h1, h2, h3 {
   .stat:last-child { border-bottom: none; }
   .auth-trust { grid-template-columns: 1fr; }
   .price-grid { grid-template-columns: 1fr; }
-  .nav nav a:not(.btn) { display: none; }
+  .nav-inner nav a:not(.btn) { display: none; }
   .brand { font-size: 16px; letter-spacing: 0.12em; }
   .faq summary { font-size: 1.02rem; }
   .toast-stack { right: 12px; left: 12px; bottom: 12px; max-width: none; }
