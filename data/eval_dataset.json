@@ -1,23 +1,176 @@
 [
   {
     "question": "What is the Transformer model?",
-    "ground_truth": "The Transformer is a model architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."
+    "ground_truth": "The Transformer is a model architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.",
+    "workspace": "academic",
+    "class": "cite"
   },
   {
     "question": "What is self-attention?",
-    "ground_truth": "Self-attention is an attention mechanism that relates different positions of a single sequence to compute a representation of that sequence."
+    "ground_truth": "Self-attention is an attention mechanism that relates different positions of a single sequence to compute a representation of that sequence.",
+    "workspace": "academic",
+    "class": "cite"
   },
   {
     "question": "How many attention heads did the authors use?",
-    "ground_truth": "The authors used 8 parallel attention heads."
+    "ground_truth": "The authors used 8 parallel attention heads.",
+    "workspace": "academic",
+    "class": "cite"
   },
   {
     "question": "What optimizer was used to train the Transformer?",
-    "ground_truth": "The Adam optimizer was used with custom learning rate scheduling."
+    "ground_truth": "The Adam optimizer was used with custom learning rate scheduling.",
+    "workspace": "academic",
+    "class": "cite"
   },
   {
     "question": "What tasks was the Transformer evaluated on?",
-    "ground_truth": "The Transformer was evaluated on English-to-German and English-to-French translation tasks."
+    "ground_truth": "The Transformer was evaluated on English-to-German and English-to-French translation tasks.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What BLEU score did the big Transformer achieve on WMT 2014 English-to-German translation?",
+    "ground_truth": "The big Transformer established a new state-of-the-art BLEU score of 28.4 on WMT 2014 English-to-German, outperforming the previous best results including ensembles by more than 2 BLEU. Training took 3.5 days on 8 P100 GPUs.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What is the scaled dot-product attention formula used by the Transformer?",
+    "ground_truth": "Attention(Q, K, V) = softmax(QK^T / sqrt(dk)) V — the dot products of the query with all keys are divided by sqrt(dk) and passed through a softmax to obtain the weights on the values.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What are the input and inner-layer dimensions of the Transformer's position-wise feed-forward network?",
+    "ground_truth": "The dimensionality of the input and output is dmodel = 512, and the inner-layer dimensionality of the feed-forward network is dff = 2048.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What are the sizes of BERT_BASE and BERT_LARGE?",
+    "ground_truth": "BERT_BASE has L=12 layers, hidden size H=768, A=12 attention heads, and 110M total parameters; BERT_LARGE has L=24 layers, H=1024, A=16 heads, and 340M total parameters.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What percentage of tokens does BERT mask during masked language model pre-training?",
+    "ground_truth": "BERT masks 15% of all WordPiece tokens in each sequence at random; chosen positions are replaced with the [MASK] token 80% of the time, a random token 10% of the time, and the unchanged token 10% of the time.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "Which pre-training tasks does BERT use?",
+    "ground_truth": "BERT uses two pre-training tasks: a masked language model (MLM) task, which enables deep bidirectional representations, and a next sentence prediction (NSP) task that jointly pre-trains text-pair representations.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What results did BERT report on the GLUE benchmark and SQuAD?",
+    "ground_truth": "BERT pushed the GLUE score to 80.5% (a 7.7 point absolute improvement), MultiNLI accuracy to 86.7% (4.6 points absolute), SQuAD v1.1 Test F1 to 93.2 (1.5 points), and SQuAD v2.0 Test F1 to 83.1 (5.1 points).",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What are the parametric and non-parametric memories in a RAG model?",
+    "ground_truth": "The parametric memory is a pre-trained seq2seq model, and the non-parametric memory is a dense vector index of Wikipedia accessed with a pre-trained neural retriever.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "How many trainable parameters does the RAG model have?",
+    "ground_truth": "The RAG model has 626M trainable parameters in total: 110M-parameter BERT-base DPR query and document encoders plus 406M parameters from BART-large.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What are the two RAG formulations proposed by Lewis et al.?",
+    "ground_truth": "RAG-Sequence uses the same retrieved document to generate the whole target sequence, while RAG-Token can draw a different latent document for each target token.",
+    "workspace": "academic",
+    "class": "cite"
+  },
+  {
+    "question": "What is the capital of France?",
+    "ground_truth": "Paris.",
+    "workspace": "academic",
+    "class": "abstain"
+  },
+  {
+    "question": "Who painted the Mona Lisa?",
+    "ground_truth": "Leonardo da Vinci.",
+    "workspace": "academic",
+    "class": "abstain"
+  },
+  {
+    "question": "What is the chemical symbol for gold?",
+    "ground_truth": "Au.",
+    "workspace": "academic",
+    "class": "abstain"
+  },
+  {
+    "question": "What does section 32 of the Indian Evidence Act, 1872 deal with?",
+    "ground_truth": "Section 32 makes statements, written or verbal, of relevant facts made by a person who is dead, cannot be found, has become incapable of giving evidence, or whose attendance cannot be procured without an amount of delay or expense the Court considers unreasonable, relevant in specified cases — including statements as to the cause of a person's death or the circumstances of the transaction resulting in it.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "When are opinions of experts relevant under section 45 of the Indian Evidence Act?",
+    "ground_truth": "When the Court has to form an opinion upon a point of foreign law, science, or art, or as to identity of handwriting or finger-impressions, the opinions of persons specially skilled in those matters are relevant facts; such persons are called experts.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "What rule does section 60 of the Indian Evidence Act lay down about oral evidence?",
+    "ground_truth": "Oral evidence must in all cases be direct: if it refers to a fact which could be seen, it must be the evidence of a witness who says he saw it; if heard, a witness who says he heard it; opinions must be proved by the person who holds them on those grounds.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "How may the contents of a document be proved under section 61 of the Indian Evidence Act?",
+    "ground_truth": "The contents of documents may be proved either by primary or by secondary evidence.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "Who must prove the facts they assert under section 101 of the Indian Evidence Act?",
+    "ground_truth": "Whoever desires any Court to give judgment as to any legal right or liability dependent on the existence of facts which he asserts must prove that those facts exist; when a person is bound to prove the existence of any fact, the burden of proof lies on that person.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "On whom does the burden of proof lie under section 102 of the Indian Evidence Act?",
+    "ground_truth": "The burden of proof in a suit or proceeding lies on that person who would fail if no evidence at all were given on either side.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "Who is competent to testify under section 118 of the Indian Evidence Act?",
+    "ground_truth": "All persons are competent to testify unless the Court considers that they are prevented, by tender years, extreme old age, disease of body or mind, or any other cause of the same kind, from understanding the questions put to them or giving rational answers; a lunatic is not incompetent to testify unless lunacy prevents understanding the questions and giving rational answers.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "What is a leading question under section 141 of the Indian Evidence Act?",
+    "ground_truth": "A leading question is any question suggesting the answer which the person putting it wishes or expects to receive.",
+    "workspace": "legal",
+    "class": "cite"
+  },
+  {
+    "question": "In which year did the Second World War end?",
+    "ground_truth": "1945.",
+    "workspace": "legal",
+    "class": "abstain"
+  },
+  {
+    "question": "What is the capital of Japan?",
+    "ground_truth": "Tokyo.",
+    "workspace": "legal",
+    "class": "abstain"
+  },
+  {
+    "question": "Who wrote the play Romeo and Juliet?",
+    "ground_truth": "William Shakespeare.",
+    "workspace": "legal",
+    "class": "abstain"
   }
 ]
-  
