@@ -1054,7 +1054,9 @@ h1, h2, h3 {
   max-width: 1080px;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 62px);
+  position: relative;
+  height: calc(100vh - 62px);
+  height: calc(100dvh - 62px);
   padding-bottom: 1.5rem;
 }
 .chat-bar {
@@ -1124,6 +1126,9 @@ h1, h2, h3 {
 
 .chat-thread {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.6rem 0;
   display: flex;
   flex-direction: column;
@@ -1163,6 +1168,13 @@ h1, h2, h3 {
   transform: translateY(-2px);
   border-color: var(--accent);
   box-shadow: 0 10px 22px -14px rgba(30, 26, 20, 0.5);
+}
+.starter:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+  border-color: var(--hairline);
 }
 
 .msg { max-width: 92%; animation: answer-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1); }
@@ -1274,7 +1286,8 @@ h1, h2, h3 {
 .msg-claims summary::after { content: " +"; color: var(--ink-3); }
 .msg-source-details[open] summary::after,
 .msg-claims[open] summary::after { content: " −"; }
-.src-row { padding: 0.7rem 0; border-top: 1px solid var(--hairline); }
+.src-row { padding: 0.7rem 0; border-top: 1px solid var(--hairline); transition: background 0.45s ease; }
+.src-row.src-flash { background: rgba(107, 143, 113, 0.24); }
 .src-row-head { display: flex; gap: 0.6rem; align-items: baseline; }
 .src-id {
   font-family: var(--mono);
@@ -1313,6 +1326,21 @@ h1, h2, h3 {
 
 .msg-loading { display: flex; align-items: center; gap: 0.9rem; }
 .msg-loading p { margin: 0; color: var(--ink-3); font-family: var(--serif); font-style: italic; font-size: 14.5px; }
+.msg-wait-count {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.msg-wait-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
 .thinking-dots { display: inline-flex; gap: 5px; }
 .thinking-dots span {
   width: 7px;
@@ -1374,6 +1402,7 @@ h1, h2, h3 {
   text-transform: uppercase;
   margin: 0.4rem 0 0;
 }
+.chat-quota-empty { color: #a4553f; }
 
 /* --- modal (trace) --------------------------------------------------------- */
 
