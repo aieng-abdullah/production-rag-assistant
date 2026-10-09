@@ -15,8 +15,6 @@ import json
 import os
 import re
 import sys
-import threading
-import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
@@ -38,7 +36,6 @@ from src.config import Config
 from src.db.qdrant_client import load_all_chunks
 from src.generation.chain import generate
 from src.generation.schema import AnswerVerificationError
-from src.ingestion import embedder as _embedder
 from src.ingestion.embedder import _get_model as get_embedding_model
 from src.retrieval.bm25_index import build_bm25_index
 
@@ -65,48 +62,6 @@ GENERATE_ATTEMPTS = 3
 # Columns ragas consumes — extra bookkeeping keys are stripped before the
 # dataset is handed to `evaluate()`.
 RAGAS_INPUT_COLUMNS = ("question", "answer", "contexts", "ground_truth")
-
-# Voyage trial accounts allow 3 RPM on /embeddings. Retrieval query embeds
-# and the ragas answer-relevancy embeds share that pool and neither path
-# paces itself (embed_chunks paces only ingestion batches), so the eval run
-# serialises every embeddings API call through _post_embeddings.
-VOYAGE_EMBED_PACE_S = float(os.getenv("VOYAGE_EMBED_PACE_S", "21"))
-
-_pace_lock = threading.Lock()
-_pace_next_embed = 0.0
-_voyage_paced = False
-
-
-def wait_for_voyage_slot() -> None:
-    """Block until this process may make the next embeddings API call."""
-    global _pace_next_embed
-    with _pace_lock:
-        now = time.monotonic()
-        wait = _pace_next_embed - now
-        if wait > 0:
-            time.sleep(wait)
-            now = time.monotonic()
-        _pace_next_embed = now + VOYAGE_EMBED_PACE_S
-
-
-def install_voyage_pacing() -> None:
-    """Wrap the embeddings transport with the rate-limit slot waiter.
-
-    Installed from main() only — unit tests import this module but never
-    make API calls.
-    """
-    global _voyage_paced
-    if _voyage_paced:
-        return
-    original = _embedder._post_embeddings
-
-    def paced(*args: Any, **kwargs: Any) -> Any:
-        wait_for_voyage_slot()
-        return original(*args, **kwargs)
-
-    _embedder._post_embeddings = paced
-    _voyage_paced = True
-    logger.info(f"Voyage embedding pacing installed ({VOYAGE_EMBED_PACE_S}s/call)")
 
 _llm = None
 _embeddings = None
@@ -480,7 +435,6 @@ def parse_args(argv: Sequence[str] | None = None):
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    install_voyage_pacing()
     Config.validate()
     logger.info(f"Starting RAG evaluation (default workspace={args.workspace})")
     eval_dataset = load_eval_dataset(EVAL_DATASET_PATH)
