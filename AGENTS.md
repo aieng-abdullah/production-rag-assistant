@@ -26,17 +26,27 @@ python3 eval/eval_runner.py
 cd frontend && npm run build
 ```
 
-### Quality gates (local-only)
+### Quality gates (local-only, by decision)
 
-`verify_eval.py` is the **primary gate**. Before pushing changes to `src/retrieval/**` or `src/generation/**`, run it from the repo root (requires GROQ/VOYAGE/QDRANT keys in `.env`):
+`make eval` runs both gates that run on this account:
 
 ```bash
-python3 eval/verify_eval.py      # deterministic citation gates → verify_results.json
+make eval           # both: verify_eval.py + retrieval_precision.py
+make eval-fast      # citation gates only — skips the ~13 min retrieval run
 ```
 
-Must exit 0. The committed `verify_results.json` is the baseline — refresh and commit it with the change. Eval is LOCAL-ONLY: it is not run in CI.
+These are **local-only on purpose** (issue #110). Both need paid API keys, and Voyage's 3 RPM trial cap means the retrieval gate spends ~13 minutes in pacing. CI runs `lint` and `test` only.
 
-Gates: `citation_precision` 1.0 · `citation_recall` 0.75 · `abstention_accuracy` 1.0.
+Individually:
+
+```bash
+python3 eval/verify_eval.py          # citation gates  → verify_results.json
+python3 eval/retrieval_precision.py  # retrieval gate → retrieval_results.json
+```
+
+Both must exit 0. The committed `verify_results.json` and `retrieval_results.json` are the baselines — refresh and commit them with the change.
+
+Gates: `citation_precision` 1.0 · `citation_recall` 0.75 · `abstention_accuracy` 1.0 · `doc_hit@k` · `ground_truth_coverage@5`.
 
 #### Ragas: kept, not retired
 
@@ -51,7 +61,9 @@ So `results.json` is currently a **stale baseline** — 5 samples from a 29-item
 
 **To make it runnable:** add a payment method to both providers. Voyage goes to 2000 RPM / 16M TPM (set `VOYAGE_EMBED_PACE_S=0` afterwards — it becomes a needless 21s tax per query), and Groq's daily budget rises. Anyone with funded keys can reproduce the full metric set; the runner needs no changes.
 
-Until then, `verify_eval.py` is the enforced gate and the only trustworthy measurement available on this account.
+Until then, `verify_eval.py` and `retrieval_precision.py` are the only trustworthy measurements available on this account. `make ragas` runs it for anyone with funded keys.
+
+`eval_runner.py` degrades rather than crashing: unmeasurable metrics are logged, omitted, then counted as `FAIL` against their gate so the run still exits non-zero. The deadline is configurable via `RAGAS_TIMEOUT_S` (default 900, against Ragas' 180 default).
 
 ## System Architecture
 
@@ -74,7 +86,7 @@ frontend/                     # React 19 + TS + Vite 6 SPA
     api/client.ts             # Typed fetch (Bearer, 401→login, 429 detail, 60s timeout)
     auth/AuthContext.tsx      # JWT storage, Google/guest/demo login, fragment token
   public/                     # favicon, static assets
-eval/                         # Ragas evaluation runner
+eval/                         # verify_eval (citation gates) + retrieval_precision (top-k) + eval_runner (Ragas)
 tests/                        # Pytest suite (backend)
 ```
 
@@ -87,7 +99,7 @@ tests/                        # Pytest suite (backend)
 - **Cross-encoder reranker** (`voyage-rerank-3-lite`) runs via Voyage API. Accounts for major query latency.
 - **Citation validation** is Pydantic-enforced: every answer must contain `[SOURCE N]` patterns or it raises `ValidationError`.
 - **Langfuse** optional. Traces skipped silently when keys absent.
-- **Eval dataset** at `data/eval_dataset.json`. Results to `results.json`.
+- **Eval datasets** at `data/eval_dataset.json` (29 items, Ragas) and `data/verify_eval.json` (8 adversarial cases, citation gates). They mark abstention differently — `class: abstain` vs `expect: abstain` — so readers must check both.
 - **Frontend dev** runs on `:5173`, proxies API to `:8001` via Vite config.
 - **CORS**: single origin `Config.FRONTEND_URL` (default `http://localhost:5173`), no cookies.
 

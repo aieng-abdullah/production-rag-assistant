@@ -1,6 +1,6 @@
 # PLAN.md — Citation-Verified RAG SaaS
 
-**Thesis:** ChatGPT guesses. We verify — every sentence, against the source,
+**Thesis:** ChatGPT guesses. We verify — every claim, against the source,
 before you see it.
 
 Business discipline, portfolio expectation: no revenue required, money = plus.
