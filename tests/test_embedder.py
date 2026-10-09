@@ -1,5 +1,6 @@
 """Tests for the Voyage embedder (API-only — HTTP mocked, no network)."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -27,6 +28,86 @@ def fake_voyage_key(monkeypatch):
     `OSError: VOYAGE_API_KEY is not set`.
     """
     monkeypatch.setattr(Config, "VOYAGE_API_KEY", "test-key")
+
+
+@pytest.fixture(autouse=True)
+def reset_pacing():
+    """Pacing is process-wide, so clear the window between tests."""
+    embedder._reset_pacing()
+    yield
+    embedder._reset_pacing()
+
+
+def test_embed_query_is_paced():
+    """Regression: pacing used to live only in `embed_chunks`.
+
+    `embed_query` is the live retrieval path (`qdrant_search` calls it per
+    user query) and the eval path. With no pacing it fired requests
+    back-to-back against a 3 RPM account and 429'd, which is what made
+    `eval/verify_eval.py` unrunnable.
+    """
+    embedder.Config.VOYAGE_EMBED_PACE_S = 21
+    embedder._reset_pacing()
+
+    with patch("src.ingestion.embedder.httpx.post") as mock_post:
+        mock_post.return_value = _response([[3.0, 4.0]])
+        with patch("src.ingestion.embedder.time.sleep") as mock_sleep:
+            for _ in range(3):
+                embedder.embed_query("q")
+
+    assert mock_post.call_count == 3
+    # First call opens the window; calls two and three must wait.
+    assert mock_sleep.call_count == 2
+
+
+def test_pacing_is_a_noop_when_disabled():
+    """`VOYAGE_EMBED_PACE_S=0` must not sleep — paid tiers do not need it."""
+    embedder.Config.VOYAGE_EMBED_PACE_S = 0
+    embedder._reset_pacing()
+
+    with patch("src.ingestion.embedder.httpx.post") as mock_post:
+        mock_post.return_value = _response([[3.0, 4.0]])
+        with patch("src.ingestion.embedder.time.sleep") as mock_sleep:
+            for _ in range(5):
+                embedder.embed_query("q")
+
+    assert mock_post.call_count == 5
+    mock_sleep.assert_not_called()
+
+
+def test_embed_chunks_paces_each_batch():
+    """Batched ingestion still paces, now via the shared choke point."""
+    embedder.Config.VOYAGE_EMBED_PACE_S = 21
+    embedder._reset_pacing()
+
+    with patch("src.ingestion.embedder.httpx.post") as mock_post:
+        mock_post.side_effect = _echo_vectors([1.0, 0.0])
+        with patch("src.ingestion.embedder.time.sleep") as mock_sleep:
+            embedder.embed_chunks(
+                [{"text": "a"}, {"text": "b"}, {"text": "c"}], batch_size=2
+            )
+
+    assert mock_post.call_count == 2
+    assert mock_sleep.call_count == 1
+
+
+def test_retry_policy_has_jitter():
+    """Exponential backoff without jitter re-synchronises a burst of
+    retries into the same window and they collide again.
+
+    `wait_random_exponential` subclasses `wait_exponential`, so the type
+    check that distinguishes them is the class itself, not isinstance.
+    """
+    import tenacity
+
+    wait = embedder._RETRY_POLICY["wait"]
+    assert type(wait) is tenacity.wait_random_exponential
+
+    # `min` clamps the low attempts to a flat 5s; jitter only shows once
+    # the exponential term clears it, so probe a later attempt.
+    states = [SimpleNamespace(attempt_number=3, next_action=None) for _ in range(8)]
+    waits = [wait(state) for state in states]
+    assert len(set(waits)) > 1, "backoff must vary between retries"
 
 
 def _response(vectors: list[list[float]], input_type: str | None = None) -> MagicMock:

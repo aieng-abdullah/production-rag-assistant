@@ -27,21 +27,57 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_random_exponential,
 )
 
 from src.config import Config
 from src.voyage_usage import record as record_usage
 
 # Voyage trial accounts (no payment method): 3 RPM / 10K TPM. Waits below
-# outlast one rate-limit window (20s) without hammering the API.
+# outlast one rate-limit window (20s) without hammering the API. Randomised
+# so a burst of concurrent retries does not re-synchronise into the next
+# window and collide again.
 _RETRY_POLICY = dict(
     stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=2, min=5, max=45),
+    wait=wait_random_exponential(multiplier=2, min=5, max=45),
     retry=retry_if_exception_type(httpx.HTTPError),
     before=before_log(logger, logging.WARNING),
     reraise=True,
 )
+
+# Single choke point for pacing. The limit is per organization, so one
+# process-wide gate has to cover embeddings *and* rerank, not just the
+# embedding path — otherwise concurrent callers race past the window.
+_rate_lock = Lock()
+_last_call = 0.0
+
+
+def _reset_pacing() -> None:
+    """Clear the pacing window (tests)."""
+    global _last_call
+    with _rate_lock:
+        _last_call = 0.0
+
+
+def _pace() -> None:
+    """Block until `VOYAGE_EMBED_PACE_S` has passed since the last call.
+
+    Lives here rather than in the batching loops because pacing used to
+    sit only in ``embed_chunks`` — the ingestion path. ``embed_query`` and
+    ``embed_documents`` had none, so every live retrieval embedded
+    unthrottled against a 3 RPM account and 429'd. One gate at the HTTP
+    boundary covers all three paths and any future caller.
+    """
+    pace_s = Config.VOYAGE_EMBED_PACE_S
+    if not pace_s:
+        return
+    global _last_call
+    with _rate_lock:
+        elapsed = time.monotonic() - _last_call
+        if _last_call and elapsed < pace_s:
+            time.sleep(pace_s - elapsed)
+        _last_call = time.monotonic()
+
 
 
 def _normalize(vector: List[float]) -> List[float]:
@@ -68,6 +104,8 @@ def _post_embeddings(texts: List[str], input_type: str) -> List[List[float]]:
             "VOYAGE_API_KEY is not set — embeddings are API-only (no local "
             "fallback). Add it to .env."
         )
+
+    _pace()
 
     response = httpx.post(
         f"{Config.VOYAGE_BASE_URL}/embeddings",
@@ -165,15 +203,7 @@ def embed_chunks(chunks: List[Dict], batch_size: int | None = None) -> List[Dict
 
     logger.debug(f"Embedding {len(texts)} chunks (batch_size: {size})")
     vectors: List[List[float]] = []
-    pace_s = Config.VOYAGE_EMBED_PACE_S
-    last_call = 0.0
     for start in range(0, len(texts), size):
-        if start and pace_s:
-            # Trial cap is 3 RPM — space batch calls instead of eating 429s.
-            elapsed = time.monotonic() - last_call
-            if elapsed < pace_s:
-                time.sleep(pace_s - elapsed)
-        last_call = time.monotonic()
         vectors.extend(_post_embeddings(texts[start : start + size], input_type="document"))
 
     for chunk, embedding in zip(chunks, vectors):
