@@ -31,16 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from argparse import ArgumentParser
 
 import pandas as pd
-from datasets import Dataset
 from langchain_groq import ChatGroq
 from loguru import logger
-from ragas import evaluate
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics._answer_relevance import AnswerRelevancy
-from ragas.metrics._context_precision import ContextPrecision
-from ragas.metrics._context_recall import ContextRecall
-from ragas.metrics._faithfulness import Faithfulness
 
 from src.config import Config
 from src.db.qdrant_client import load_all_chunks
@@ -120,10 +112,43 @@ _llm = None
 _embeddings = None
 
 
+def _import_ragas():
+    """Import ragas on first use, not at module import.
+
+    `ragas.llms.base` imports `langchain_community.chat_models.vertexai`,
+    which needs the optional `google-cloud-aiplatform` extra. Without it,
+    importing ragas raises `ModuleNotFoundError` — and because the test
+    suite imports this module for its pure score-extraction helpers, an
+    eager import fails collection for every test in CI.
+
+    Deferring the import keeps the helpers importable without the extra
+    and still surfaces the real error if an actual eval run needs it.
+    """
+    from datasets import Dataset
+    from ragas import evaluate
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.metrics._answer_relevance import AnswerRelevancy
+    from ragas.metrics._context_precision import ContextPrecision
+    from ragas.metrics._context_recall import ContextRecall
+    from ragas.metrics._faithfulness import Faithfulness
+
+    return {
+        "Dataset": Dataset,
+        "evaluate": evaluate,
+        "LangchainLLMWrapper": LangchainLLMWrapper,
+        "LangchainEmbeddingsWrapper": LangchainEmbeddingsWrapper,
+        "AnswerRelevancy": AnswerRelevancy,
+        "ContextPrecision": ContextPrecision,
+        "ContextRecall": ContextRecall,
+        "Faithfulness": Faithfulness,
+    }
+
+
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = LangchainLLMWrapper(
+        _llm = _import_ragas()["LangchainLLMWrapper"](
             ChatGroq(api_key=Config.GROQ_API_KEY, model=Config.GROQ_MODEL)
         )
     return _llm
@@ -132,18 +157,21 @@ def _get_llm():
 def _get_embeddings():
     global _embeddings
     if _embeddings is None:
-        _embeddings = LangchainEmbeddingsWrapper(get_embedding_model())
+        _embeddings = _import_ragas()["LangchainEmbeddingsWrapper"](
+            get_embedding_model()
+        )
     return _embeddings
 
 
 def _build_metrics(names: Sequence[str]) -> List[Any]:
+    ragas = _import_ragas()
     factories = {
-        "faithfulness": lambda: Faithfulness(llm=_get_llm()),
-        "answer_relevancy": lambda: AnswerRelevancy(
+        "faithfulness": lambda: ragas["Faithfulness"](llm=_get_llm()),
+        "answer_relevancy": lambda: ragas["AnswerRelevancy"](
             llm=_get_llm(), embeddings=_get_embeddings()
         ),
-        "context_precision": lambda: ContextPrecision(llm=_get_llm()),
-        "context_recall": lambda: ContextRecall(llm=_get_llm()),
+        "context_precision": lambda: ragas["ContextPrecision"](llm=_get_llm()),
+        "context_recall": lambda: ragas["ContextRecall"](llm=_get_llm()),
     }
     metrics = []
     for name in names:
@@ -346,8 +374,9 @@ def attach_metric_scores(
 def evaluate_samples(samples: List[Dict[str, Any]], metrics: Sequence[str]) -> pd.DataFrame:
     """Live ragas call — the only place API traffic happens."""
     rows = [{column: sample.get(column) for column in RAGAS_INPUT_COLUMNS} for sample in samples]
-    dataset = Dataset.from_list(rows)
-    result = evaluate(dataset=dataset, metrics=_build_metrics(metrics))
+    ragas = _import_ragas()
+    dataset = ragas["Dataset"].from_list(rows)
+    result = ragas["evaluate"](dataset=dataset, metrics=_build_metrics(metrics))
     return result.to_pandas()
 
 

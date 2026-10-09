@@ -5,8 +5,21 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from src.config import Config
 from src.retrieval import reranker
 from src.retrieval.reranker import rerank
+
+
+@pytest.fixture(autouse=True)
+def fake_voyage_key(monkeypatch):
+    """Give mocked tests a key.
+
+    Same reason as tests/test_embedder.py: these tests mock `httpx.post`,
+    but `_post_rerank` still guards on `Config.VOYAGE_API_KEY`. Without
+    this they pass only where a real key happens to be configured, and
+    CI fails all six with `OSError: VOYAGE_API_KEY is not set`.
+    """
+    monkeypatch.setattr(Config, "VOYAGE_API_KEY", "test-key")
 
 
 def _response(payload: dict, status_code: int = 200) -> MagicMock:

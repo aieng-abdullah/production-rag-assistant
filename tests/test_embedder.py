@@ -16,6 +16,19 @@ def no_pacing(monkeypatch):
     monkeypatch.setattr(Config, "VOYAGE_EMBED_PACE_S", 0)
 
 
+@pytest.fixture(autouse=True)
+def fake_voyage_key(monkeypatch):
+    """Give mocked tests a key.
+
+    These tests mock `httpx.post`, but `_post_embeddings` still guards on
+    `Config.VOYAGE_API_KEY` before sending. Without this they only passed
+    on machines whose `.env` happened to hold a real key — CI has no
+    `.env`, so all seven failed there with
+    `OSError: VOYAGE_API_KEY is not set`.
+    """
+    monkeypatch.setattr(Config, "VOYAGE_API_KEY", "test-key")
+
+
 def _response(vectors: list[list[float]], input_type: str | None = None) -> MagicMock:
     """Fake Voyage /embeddings response (index order shuffled on purpose)."""
     data = [
