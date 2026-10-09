@@ -1,0 +1,475 @@
+{
+  "scores": {
+    "doc_hit@1": 1.0,
+    "doc_hit@3": 1.0,
+    "doc_hit@5": 1.0,
+    "ground_truth_coverage@1": 0.6434,
+    "ground_truth_coverage@3": 0.7879,
+    "ground_truth_coverage@5": 0.8163,
+    "abstain_retrieval_empty": 0.0
+  },
+  "gates": {
+    "doc_hit@1": {
+      "score": 1.0,
+      "threshold": 0.5,
+      "status": "PASS"
+    },
+    "doc_hit@3": {
+      "score": 1.0,
+      "threshold": 0.8,
+      "status": "PASS"
+    },
+    "doc_hit@5": {
+      "score": 1.0,
+      "threshold": 0.85,
+      "status": "PASS"
+    },
+    "ground_truth_coverage@5": {
+      "score": 0.8163,
+      "threshold": 0.55,
+      "status": "PASS"
+    }
+  },
+  "per_workspace": {
+    "academic": {
+      "doc_hit@1": 1.0,
+      "doc_hit@3": 1.0,
+      "doc_hit@5": 1.0,
+      "ground_truth_coverage@1": 0.5672,
+      "ground_truth_coverage@3": 0.7355,
+      "ground_truth_coverage@5": 0.7798,
+      "abstain_retrieval_empty": 0.0
+    },
+    "legal": {
+      "doc_hit@1": 1.0,
+      "doc_hit@3": 1.0,
+      "doc_hit@5": 1.0,
+      "ground_truth_coverage@1": 0.7371,
+      "ground_truth_coverage@3": 0.8524,
+      "ground_truth_coverage@5": 0.8613,
+      "abstain_retrieval_empty": 0.0
+    }
+  },
+  "items": [
+    {
+      "id": "legal-proviso-marriage",
+      "workspace": "legal",
+      "class": "proviso",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "legal-proviso-discovery",
+      "workspace": "legal",
+      "class": "proviso",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 0.7142857142857143,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "legal-cross-ref-158",
+      "workspace": "legal",
+      "class": "missing-cross-ref",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "legal-conflicting-102",
+      "workspace": "legal",
+      "class": "conflicting-sources",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "legal-conflicting-101",
+      "workspace": "legal",
+      "class": "conflicting-sources",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "legal-out-of-corpus",
+      "workspace": "legal",
+      "class": "out-of-corpus",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "academic-attention-sublayer",
+      "workspace": "academic",
+      "class": "grounded-cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "doc_hit@1": true,
+      "doc_hit@3": true,
+      "doc_hit@5": true,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "academic-out-of-corpus",
+      "workspace": "academic",
+      "class": "out-of-corpus",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "What is the Transformer model?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.45454545454545453,
+      "ground_truth_coverage@3": 0.6363636363636364,
+      "ground_truth_coverage@5": 0.6363636363636364
+    },
+    {
+      "id": "What is self-attention?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.9,
+      "ground_truth_coverage@3": 0.9,
+      "ground_truth_coverage@5": 0.9
+    },
+    {
+      "id": "How many attention heads did the authors use?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.6,
+      "ground_truth_coverage@3": 0.6,
+      "ground_truth_coverage@5": 0.6
+    },
+    {
+      "id": "What optimizer was used to train the Transformer",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.7142857142857143,
+      "ground_truth_coverage@3": 0.7142857142857143,
+      "ground_truth_coverage@5": 0.7142857142857143
+    },
+    {
+      "id": "What tasks was the Transformer evaluated on?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.42857142857142855,
+      "ground_truth_coverage@3": 0.7142857142857143,
+      "ground_truth_coverage@5": 0.7142857142857143
+    },
+    {
+      "id": "What BLEU score did the big Transformer achieve ",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.375,
+      "ground_truth_coverage@3": 0.6666666666666666,
+      "ground_truth_coverage@5": 0.7916666666666666
+    },
+    {
+      "id": "What is the scaled dot-product attention formula",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.35714285714285715,
+      "ground_truth_coverage@3": 0.5,
+      "ground_truth_coverage@5": 0.5
+    },
+    {
+      "id": "What are the input and inner-layer dimensions of",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.75,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "What are the sizes of BERT_BASE and BERT_LARGE?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.5714285714285714,
+      "ground_truth_coverage@3": 0.7142857142857143,
+      "ground_truth_coverage@5": 0.8571428571428571
+    },
+    {
+      "id": "What percentage of tokens does BERT mask during ",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.13333333333333333,
+      "ground_truth_coverage@3": 0.6,
+      "ground_truth_coverage@5": 0.6
+    },
+    {
+      "id": "Which pre-training tasks does BERT use?",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.21739130434782608,
+      "ground_truth_coverage@3": 0.4782608695652174,
+      "ground_truth_coverage@5": 0.6956521739130435
+    },
+    {
+      "id": "What results did BERT report on the GLUE benchma",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.75,
+      "ground_truth_coverage@3": 0.8333333333333334,
+      "ground_truth_coverage@5": 0.8333333333333334
+    },
+    {
+      "id": "What are the parametric and non-parametric memor",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.8571428571428571,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "How many trainable parameters does the RAG model",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.5,
+      "ground_truth_coverage@3": 0.6111111111111112,
+      "ground_truth_coverage@5": 0.8333333333333334
+    },
+    {
+      "id": "What are the two RAG formulations proposed by Le",
+      "workspace": "academic",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.4666666666666667,
+      "ground_truth_coverage@3": 0.8,
+      "ground_truth_coverage@5": 0.8
+    },
+    {
+      "id": "What is the capital of France?",
+      "workspace": "academic",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "Who painted the Mona Lisa?",
+      "workspace": "academic",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "What is the chemical symbol for gold?",
+      "workspace": "academic",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "What does section 32 of the Indian Evidence Act,",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.15151515151515152,
+      "ground_truth_coverage@3": 0.18181818181818182,
+      "ground_truth_coverage@5": 0.21212121212121213
+    },
+    {
+      "id": "When are opinions of experts relevant under sect",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.7727272727272727,
+      "ground_truth_coverage@3": 0.8636363636363636,
+      "ground_truth_coverage@5": 0.8636363636363636
+    },
+    {
+      "id": "What rule does section 60 of the Indian Evidence",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.2777777777777778,
+      "ground_truth_coverage@3": 0.6111111111111112,
+      "ground_truth_coverage@5": 0.6666666666666666
+    },
+    {
+      "id": "How may the contents of a document be proved und",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "Who must prove the facts they assert under secti",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.8095238095238095,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "On whom does the burden of proof lie under secti",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.5833333333333334,
+      "ground_truth_coverage@3": 0.6666666666666666,
+      "ground_truth_coverage@5": 0.6666666666666666
+    },
+    {
+      "id": "Who is competent to testify under section 118 of",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 0.2727272727272727,
+      "ground_truth_coverage@3": 0.7575757575757576,
+      "ground_truth_coverage@5": 0.7878787878787878
+    },
+    {
+      "id": "What is a leading question under section 141 of ",
+      "workspace": "legal",
+      "class": "cite",
+      "signal": "cite",
+      "retrieved": 5,
+      "ground_truth_coverage@1": 1.0,
+      "ground_truth_coverage@3": 1.0,
+      "ground_truth_coverage@5": 1.0
+    },
+    {
+      "id": "In which year did the Second World War end?",
+      "workspace": "legal",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "What is the capital of Japan?",
+      "workspace": "legal",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    },
+    {
+      "id": "Who wrote the play Romeo and Juliet?",
+      "workspace": "legal",
+      "class": "abstain",
+      "signal": "abstain",
+      "retrieved": 5,
+      "doc_hit@1": null,
+      "ground_truth_coverage@1": null,
+      "doc_hit@3": null,
+      "ground_truth_coverage@3": null,
+      "doc_hit@5": null,
+      "ground_truth_coverage@5": null,
+      "abstain_retrieval_empty": false
+    }
+  ]
+}
