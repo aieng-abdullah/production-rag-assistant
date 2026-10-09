@@ -147,7 +147,7 @@ Hybrid Retrieval-Augmented Generation stack. How each piece solves part of the p
 | Validation | **Pydantic** | Hard gate: uncited sentence → rejected response |
 | UI | **React SPA + FastAPI** | Modern frontend, scoped API, Render Docker + static deploy |
 | Observability | **Langfuse (opt-in/sampled)** | Production-safe tracing; off by default, sampled when enabled |
-| Evaluation | **Citation gates + Ragas** | Quote-containment, recall and abstention gates on a 29-item golden set; Ragas metrics when keys are funded |
+| Evaluation | **Citation gates + Ragas** | Quote-containment, recall and abstention gates on an 8-item adversarial set; Ragas metrics over the 29-item corpus when keys are funded |
 | CI | **GitHub Actions** | Lint + 291 tests on every PR |
 
 ### Pipeline
@@ -224,6 +224,8 @@ The engine stays shared; only prompt profiles, chunk metadata schemas, and citat
 
 ### Results (citation gates — enforced, runs today)
 
+`python3 eval/verify_eval.py`, 8 adversarial cases over `data/verify_eval.json`:
+
 | Gate | Score | Threshold | Status |
 |---|---|---|---|
 | Citation precision | **1.00** | 1.00 | PASS |
@@ -232,11 +234,13 @@ The engine stays shared; only prompt profiles, chunk metadata schemas, and citat
 
 **Citation precision 1.00** — every quoted phrase appears verbatim in the chunk it cites.
 
-**Citation recall 1.00** — every expected citation is present.
+**Citation recall 1.00** — every expected citation is present (was 0.83 before deterministic verification landed).
 
 **Abstention accuracy 1.00** — out-of-corpus questions abstain instead of guessing.
 
-These run in `eval/verify_eval.py` and are the project's enforced quality gate.
+Cases: 2 out-of-corpus, 2 conflicting-sources, 2 proviso, 1 missing-cross-reference, 1 grounded-cite. Deliberately adversarial rather than a broad sample — n=8 is small, and these target the failure modes that matter for legal text.
+
+Per-case outcome: 6 `verified`, 1 `partial` (`legal-conflicting-101`), 2 `abstained` (both out-of-corpus, correctly). The `partial` is a real gap, not noise — see [Known limitations](#known-limitations).
 
 ### Ragas metrics (last run: n=5, stale)
 
@@ -387,13 +391,14 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 
 | Limitation | Status | Planned fix |
 |---|---|---|
-| Context precision 0.375 (below 0.70 gate) | Open | Section-aware metadata filtering |
-| Eval gate not wired into CI | Open | Run Ragas in `eval.yml`; block merge on threshold breach |
-| Golden set n=5 | Open | Expand to 30–50 verified question–answer pairs |
+| Context precision 0.375 (below 0.70 gate) | Open — not re-measurable on free tiers | Section-aware parent-chunk retrieval |
+| `legal-conflicting-101` scores `partial` | Open | Conflicting-source arbitration in the prompt |
+| Citation gate set is n=8 | Open | Grow `data/verify_eval.json` toward 20–30 cases |
+| Eval gate not wired into CI | Open | Run `verify_eval.py` in CI; block merge on threshold breach |
 | p95 latency 11.09s (CPU rerank) | Accepted for now | Reranker optimization (see bottleneck section) |
 | SQLite relational DB on free tier is ephemeral | Open | Move DATABASE_URL to Neon/Postgres |
 
-CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. Ragas evaluation runs locally via `python3 eval/eval_runner.py` — the badge reflects lint + tests, not an eval gate.
+CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. The citation gate runs locally via `python3 eval/verify_eval.py`; the badge reflects lint + tests, not an eval gate.
 
 ---
 
