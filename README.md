@@ -147,7 +147,7 @@ Hybrid Retrieval-Augmented Generation stack. How each piece solves part of the p
 | Validation | **Pydantic** | Hard gate: uncited sentence → rejected response |
 | UI | **React SPA + FastAPI** | Modern frontend, scoped API, Render Docker + static deploy |
 | Observability | **Langfuse (opt-in/sampled)** | Production-safe tracing; off by default, sampled when enabled |
-| Evaluation | **Ragas** | Faithfulness/relevancy gates on a golden set |
+| Evaluation | **Citation gates + Ragas** | Quote-containment, recall and abstention gates on a 29-item golden set; Ragas metrics when keys are funded |
 | CI | **GitHub Actions** | Lint + 291 tests on every PR |
 
 ### Pipeline
@@ -222,22 +222,38 @@ The engine stays shared; only prompt profiles, chunk metadata schemas, and citat
 
 ## For engineers
 
-### Results (Ragas, n=5 golden set)
+### Results (citation gates — enforced, runs today)
+
+| Gate | Score | Threshold | Status |
+|---|---|---|---|
+| Citation precision | **1.00** | 1.00 | PASS |
+| Citation recall | **1.00** | 0.75 | PASS |
+| Abstention accuracy | **1.00** | 1.00 | PASS |
+
+**Citation precision 1.00** — every quoted phrase appears verbatim in the chunk it cites.
+
+**Citation recall 1.00** — every expected citation is present.
+
+**Abstention accuracy 1.00** — out-of-corpus questions abstain instead of guessing.
+
+These run in `eval/verify_eval.py` and are the project's enforced quality gate.
+
+### Ragas metrics (last run: n=5, stale)
 
 | Metric | Score | Threshold | Status |
 |---|---|---|---|
-| Faithfulness | **1.00** | 0.75 | PASS |
-| Answer relevancy | **0.88** | 0.75 | PASS |
-| Context recall | **1.00** | 0.70 | PASS |
+| Faithfulness | 1.00 | 0.75 | PASS |
+| Answer relevancy | 0.88 | 0.75 | PASS |
+| Context recall | 1.00 | 0.70 | PASS |
 | Context precision | **0.375** | 0.70 | **FAIL** |
 
 **Faithfulness 1.00** — every claim grounded in retrieved context; system abstains rather than fabricates.
 
 **Answer relevancy 0.88** — grounding prompt sometimes returns "I don't have enough information" instead of guessing. Desired tradeoff.
 
-**Context precision 0.375 (FAIL)** — overlapping academic chunks pull partially relevant context. Planned fix: section-aware metadata filtering. See [Known limitations](#known-limitations).
+**Context precision 0.375 (FAIL)** — overlapping academic chunks pull partially relevant context. Planned fix: section-aware parent-chunk retrieval. See [Known limitations](#known-limitations).
 
-Golden set is intentionally small (n=5) and honest about it. Target: expand to 30–50 verified pairs before tuning further.
+Those numbers were measured on 5 samples from a golden set that now holds 29, so treat them as historical rather than current. The harness in `eval/` is maintained and runs against the full set — it needs funded Groq and Voyage keys, because Ragas' `context_precision` makes an LLM call per retrieved context and exceeds the free-tier daily token budget.
 
 ---
 
