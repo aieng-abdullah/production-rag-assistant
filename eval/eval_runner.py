@@ -63,6 +63,11 @@ GENERATE_ATTEMPTS = 3
 # dataset is handed to `evaluate()`.
 RAGAS_INPUT_COLUMNS = ("question", "answer", "contexts", "ground_truth")
 
+# Per-sample-metric deadline for ragas. Its 180s default assumes an
+# unpaced provider; at `VOYAGE_EMBED_PACE_S` behind a 3 RPM account, one
+# sample-metric can legitimately take minutes. See `_build_run_config`.
+RAGAS_TIMEOUT_S = int(os.getenv("RAGAS_TIMEOUT_S", "900"))
+
 _llm = None
 _embeddings = None
 
@@ -297,7 +302,15 @@ def mean_metric_scores(
             continue
         scores[metric] = total / count
     if missing:
-        raise KeyError(f"no scores computed for metrics: {missing}")
+        # Previously this raised, discarding every metric that *did* score.
+        # A run where one metric times out should still report the other
+        # three — `check_thresholds` then reports the missing one as a
+        # FAIL against its gate, which is what actually happened and what
+        # a reader needs to see.
+        logger.error(
+            f"no scores computed for metrics: {missing} — "
+            "reported as FAIL; likely ragas timeouts or a provider outage"
+        )
     return scores
 
 
@@ -326,12 +339,43 @@ def attach_metric_scores(
         sample["scores"] = scores
 
 
+def _build_run_config(ragas: dict):
+    """Deadline for a single metric evaluation, and worker count.
+
+    Ragas' default `RunConfig.timeout` is 180s per sample-metric. On a
+    3 RPM Voyage account each embeddings call can wait ~21s behind the
+    pacing gate, and `context_precision` issues a fresh LLM call per
+    candidate context — so a sample with several retrieved chunks blows
+    past 180s. Ragas logs `Exception raised in Job[N]: TimeoutError()`,
+    swallows it, and returns `np.nan`. Every sample then scores nothing
+    and `mean_metric_scores` raises
+    `KeyError: no scores computed for metrics: ['context_precision']`,
+    which is how this gate became unrunnable rather than merely slow.
+
+    `max_workers=1` matches the single-threaded pacing model; the
+    default of 16 fans out concurrent embedding calls that a 3 RPM
+    account cannot serve anyway.
+    """
+    from ragas.run_config import RunConfig
+
+    return RunConfig(
+        timeout=RAGAS_TIMEOUT_S,
+        max_retries=3,
+        max_wait=30,
+        max_workers=1,
+    )
+
+
 def evaluate_samples(samples: List[Dict[str, Any]], metrics: Sequence[str]) -> pd.DataFrame:
     """Live ragas call — the only place API traffic happens."""
     rows = [{column: sample.get(column) for column in RAGAS_INPUT_COLUMNS} for sample in samples]
     ragas = _import_ragas()
     dataset = ragas["Dataset"].from_list(rows)
-    result = ragas["evaluate"](dataset=dataset, metrics=_build_metrics(metrics))
+    result = ragas["evaluate"](
+        dataset=dataset,
+        metrics=_build_metrics(metrics),
+        run_config=_build_run_config(ragas),
+    )
     return result.to_pandas()
 
 
@@ -367,7 +411,16 @@ def check_thresholds(scores: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
     results = {}
     for metric, threshold in THRESHOLDS.items():
         if metric not in scores:
-            raise KeyError(f"no score computed for threshold metric {metric!r}")
+            # A metric with no score is a FAIL, not an exception. The gate
+            # must still exit non-zero — silently passing a metric that
+            # never ran would be worse than a stack trace.
+            logger.error(f"no score computed for {metric!r} — counting as FAIL")
+            results[metric] = {
+                "score": None,
+                "threshold": threshold,
+                "status": "FAIL",
+            }
+            continue
         score = scores[metric]
         results[metric] = {
             "score": round(score, 4),

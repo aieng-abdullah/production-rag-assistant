@@ -1,7 +1,7 @@
 {
   "metrics": {
     "citation_precision": 1.0,
-    "citation_recall": 0.8333,
+    "citation_recall": 1.0,
     "abstention_accuracy": 1.0
   },
   "gates": {
@@ -11,7 +11,7 @@
       "status": "PASS"
     },
     "citation_recall": {
-      "score": 0.8333,
+      "score": 1.0,
       "threshold": 0.75,
       "status": "PASS"
     },
@@ -37,9 +37,9 @@
       "class": "proviso",
       "expect": "cite",
       "status": "verified",
-      "precision_valid": 1,
-      "precision_total": 1,
-      "recall_hit": false,
+      "precision_valid": 2,
+      "precision_total": 2,
+      "recall_hit": true,
       "abstention_correct": true
     },
     {
@@ -47,8 +47,8 @@
       "class": "missing-cross-ref",
       "expect": "cite",
       "status": "verified",
-      "precision_valid": 2,
-      "precision_total": 2,
+      "precision_valid": 3,
+      "precision_total": 3,
       "recall_hit": true,
       "abstention_correct": true
     },
@@ -67,8 +67,8 @@
       "class": "conflicting-sources",
       "expect": "cite",
       "status": "partial",
-      "precision_valid": 2,
-      "precision_total": 2,
+      "precision_valid": 6,
+      "precision_total": 6,
       "recall_hit": true,
       "abstention_correct": true
     },

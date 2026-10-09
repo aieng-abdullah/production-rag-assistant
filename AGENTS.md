@@ -28,14 +28,30 @@ cd frontend && npm run build
 
 ### Quality gates (local-only)
 
-Before pushing changes to `src/retrieval/**` or `src/generation/**`, run both evals from the repo root (requires GROQ/VOYAGE/QDRANT keys in `.env`):
+`verify_eval.py` is the **primary gate**. Before pushing changes to `src/retrieval/**` or `src/generation/**`, run it from the repo root (requires GROQ/VOYAGE/QDRANT keys in `.env`):
 
 ```bash
-python3 eval/eval_runner.py      # RAGAS metric thresholds → results.json
 python3 eval/verify_eval.py      # deterministic citation gates → verify_results.json
 ```
 
-Both must exit 0. The committed `results.json` / `verify_results.json` are the baseline — refresh and commit them with the change. Eval is LOCAL-ONLY: it is not run in CI.
+Must exit 0. The committed `verify_results.json` is the baseline — refresh and commit it with the change. Eval is LOCAL-ONLY: it is not run in CI.
+
+Gates: `citation_precision` 1.0 · `citation_recall` 0.75 · `abstention_accuracy` 1.0.
+
+#### Ragas: kept, not retired
+
+`python3 eval/eval_runner.py` is maintained and works — it is simply not runnable on free-tier accounts. Two hard limits, established by measurement:
+
+- **Groq TPD is 200,000 tokens/day.** A full run (~92 metric evaluations, several LLM calls each) exceeds it and dies with `429 Rate limit reached ... on tokens per day`.
+- **Voyage is 3 RPM / 10K TPM** without a payment method. Ragas' `context_precision` issues an LLM call *per candidate context*, so most samples exceed the deadline. Ragas logs `TimeoutError`, returns `NaN`, and every `context_precision` sample scores nothing.
+
+So `results.json` is currently a **stale baseline** — 5 samples from a 29-item dataset, last written before the dataset was expanded. Do not treat its numbers as current, and do not gate on it until it has been re-run.
+
+`eval_runner.py` degrades rather than crashing: unmeasurable metrics are logged, omitted, then counted as `FAIL` against their gate so the run still exits non-zero. The deadline is configurable via `RAGAS_TIMEOUT_S` (default 900, against Ragas' 180 default).
+
+**To make it runnable:** add a payment method to both providers. Voyage goes to 2000 RPM / 16M TPM (set `VOYAGE_EMBED_PACE_S=0` afterwards — it becomes a needless 21s tax per query), and Groq's daily budget rises. Anyone with funded keys can reproduce the full metric set; the runner needs no changes.
+
+Until then, `verify_eval.py` is the enforced gate and the only trustworthy measurement available on this account.
 
 ## System Architecture
 

@@ -86,10 +86,19 @@ class TestMeanMetricScores:
         scores = mean_metric_scores([cite, abstain], ["faithfulness"])
         assert scores["faithfulness"] == pytest.approx(2 / 3)
 
-    def test_metric_absent_from_every_frame_raises(self):
-        cite = _frame(faithfulness=[1.0])
-        with pytest.raises(KeyError, match="context_precision"):
-            mean_metric_scores([cite], list(THRESHOLDS))
+    def test_metric_absent_from_every_frame_is_omitted_not_raised(self):
+        """A metric that scored nothing is dropped from the result so the
+        metrics that did score survive. It used to raise `KeyError`, which
+        discarded all three good metrics because one timed out — the run
+        that motivated this produced `no scores computed for metrics:
+        ['context_precision']` after 92 evaluations."""
+        cite = _frame(faithfulness=[1.0], answer_relevancy=[0.9])
+        scores = mean_metric_scores([cite], list(THRESHOLDS))
+
+        assert "context_precision" not in scores
+        assert "context_recall" not in scores
+        assert scores["faithfulness"] == 1.0
+        assert scores["answer_relevancy"] == 0.9
 
     def test_metric_present_in_at_least_one_frame_is_enough(self):
         cite = _frame(faithfulness=[1.0], context_precision=[0.8])
@@ -129,9 +138,24 @@ class TestThresholdGates:
         assert results["context_precision"]["status"] == "PASS"
         assert results["context_recall"]["status"] == "PASS"
 
-    def test_check_thresholds_missing_score_raises(self):
-        with pytest.raises(KeyError, match="faithfulness"):
-            check_thresholds({})
+    def test_check_thresholds_missing_score_fails_the_gate(self):
+        """A metric with no score must FAIL, never pass silently.
+
+        Passing a gate that never ran would be worse than crashing, so
+        the run still exits non-zero via `gates_failed`.
+        """
+        results = check_thresholds({})
+
+        assert all(result["status"] == "FAIL" for result in results.values())
+        assert all(result["score"] is None for result in results.values())
+        assert set(gates_failed(results)) == set(THRESHOLDS)
+
+    def test_check_thresholds_missing_score_keeps_real_scores(self):
+        results = check_thresholds({"faithfulness": 1.0, "answer_relevancy": 0.9})
+
+        assert results["faithfulness"]["status"] == "PASS"
+        assert results["context_precision"]["status"] == "FAIL"
+        assert results["context_precision"]["score"] is None
 
     def test_boundary_score_passes(self):
         results = check_thresholds(
@@ -272,3 +296,26 @@ class TestGenerationFailureHandling:
         bad = {**good, "question": "bad?", "generation_error": "boom"}
         scores = runner.evaluate_dataset([good, bad])
         assert scores == {metric: pytest.approx(0.9) for metric in THRESHOLDS}
+
+
+class TestRagasRunConfig:
+    """Ragas' default 180s per-sample deadline is too short for a paced
+    provider — `context_precision` timed out on every sample and the run
+    died with `no scores computed for metrics: ['context_precision']`."""
+
+    def test_timeout_exceeds_ragas_default(self):
+        import eval.eval_runner as runner
+        import ragas.run_config as rc_mod
+
+        ragas_default = rc_mod.RunConfig().timeout
+        config = runner._build_run_config({})
+
+        assert ragas_default == 180
+        assert config.timeout > ragas_default
+        assert config.timeout == runner.RAGAS_TIMEOUT_S
+
+    def test_single_worker_matches_paced_account(self):
+        import eval.eval_runner as runner
+
+        config = runner._build_run_config({})
+        assert config.max_workers == 1
