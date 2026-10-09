@@ -20,7 +20,7 @@
 
 **Your RAG research assistant where citations are enforced by code, not requested by prompts.**
 
-**Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every sentence cites its page-level source, validated before you see it.**
+**Ask your statutes, contracts, and papers questions. Grounded answers scoped to the legal or academic workspace — every claim carries a verbatim quote, checked against the source it cites.**
 
 **[Try the live →](https://groundedai-frontend.onrender.com)**
 
@@ -41,7 +41,7 @@ AI assistants answer questions about your documents — and then **guess**.
 - **Manual reading doesn't scale.** Researchers skim dozens of PDFs. Lawyers grep through acts and case law. Students re-read the same chapter hoping to find the one passage that matters.
 - **Wrong citations carry real risk.** Academic integrity violations. Misquoted statutes. Bad advice built on a paragraph that never said that.
 
-**ChatGPT guesses. We verify — every sentence, against the source, before you see it.**
+**ChatGPT guesses. We verify — every claim, against the source, before you see it.**
 
 ---
 
@@ -56,7 +56,7 @@ Upload a PDF → ask a question → get an answer where **every factual sentence
 | **1. Ingest** | PyMuPDF parses pages, text split into tight 256-char chunks, embedded, stored with tenant isolation | Page numbers survive to citation time |
 | **2. Retrieve** | BM25 (exact keywords) ∥ vector (semantic) → Reciprocal Rank Fusion → cross-encoder rerank | Right passage found even when wording differs |
 | **3. Answer** | LLM grounded on retrieved chunks only; identifies sources first, then answers | Model reasons over evidence, not memory |
-| **4. Validate** | Pydantic checks **every sentence** for valid `[SOURCE N]`; violations rejected | Uncited sentences never reach you |
+| **4. Validate** | Pydantic requires **every claim** to carry a citation, and checks each quote appears verbatim in the chunk it cites | Uncited or misquoted claims are rejected before you see them |
 | **5. Abstain** | Sources insufficient → "I don't have enough information" | Honesty over completeness |
 
 Validation is a **code-level gate**, not a prompt instruction. The model cannot skip it.
@@ -80,7 +80,7 @@ Validation is a **code-level gate**, not a prompt instruction. The model cannot 
 
 | Differentiator | What most demos do | What this does |
 |---|---|---|
-| **Citation enforcement** | Prompt says "cite sources" | Pydantic validates **every sentence** for `[SOURCE N]`; violations rejected at the validation layer |
+| **Citation enforcement** | Prompt says "cite sources" | Pydantic requires a citation on every claim; quote containment checked against the cited chunk |
 | **Retrieval** | Vector-only | BM25 ∥ vector → RRF → cross-encoder rerank |
 | **Latency forensics** | Guess at slowness | Langfuse traces (n=141): reranker is the bottleneck — measured, not guessed |
 | **Provider resilience** | Single LLM, dies on rate limit | Groq → Anthropic → OpenAI failover with retry + exponential backoff |
@@ -261,13 +261,14 @@ Those numbers were measured on 5 samples from a golden set that now holds 29, so
 
 ---
 
-### Grounding design (5 layers)
+### Grounding design
 
 1. **Tighter chunking** — 350 → 256 characters, 100 overlap. Tighter context = less noise to fabricate from.
 2. **Grounding prompt** — "ONLY use information from the provided sources." / "If sources don't contain enough information, say so." / cite every factual claim with `[SOURCE N]`.
-3. **Chain-of-thought source identification** — model identifies relevant sources before answering. Explicit source reasoning first; generation second.
-4. **Per-sentence citation validation** — Pydantic rejects any sentence missing `[SOURCE N]`. Previous version only required one citation total — partial hallucination slipped through.
-5. **Graceful abstention** — insufficient sources → "I don't have enough information" instead of guessing. Completeness traded for accuracy.
+3. **Structured claims** — the model returns a claim list rather than prose. Each claim carries at least one citation with a verbatim quote.
+4. **Deterministic quote verification** — Pydantic plus a normalised-containment check: the quote must actually appear in the chunk it cites. Violations reject the generation and retry, up to twice.
+5. **Entailment judging** — a separate model scores each claim `SUPPORTED` / `PARTIAL` / `UNSUPPORTED` against **all** retrieved chunks, not just the ones the model cited. Catching a claim whose real support sits in a chunk the generator missed is the point.
+6. **Graceful abstention** — insufficient sources → "I don't have enough information" instead of guessing. Completeness traded for accuracy.
 
 ---
 
@@ -306,9 +307,13 @@ Full-corpus cross-encoder inference is too expensive. Rerank only the top RRF ca
 
 <br>
 
-Prompt instructions alone are unreliable. The validator checks **every sentence** for valid `[SOURCE N]` patterns. Any uncited sentence rejects the response at the validation layer.
+Prompt instructions alone are unreliable. The model returns structured claims, and Pydantic requires each one to carry at least one citation. Every quote is then checked for normalised containment against the chunk it cites — a quote that does not appear there is rejected at the validation layer.
 
-This blocks partial hallucination where some sentences are cited and others are not.
+This blocks partial hallucination where some claims are cited and others are not.
+
+A claim whose quote does not appear in the cited chunk is rejected outright — the generation is retried with the failure flagged, up to twice. That is deterministic and costs no model call.
+
+Entailment is checked separately. A second model, from a different family than the generator so it is not grading its own homework, scores each claim `SUPPORTED` / `PARTIAL` / `UNSUPPORTED` against the retrieved evidence. **An `UNSUPPORTED` claim still ships, carrying an `unverified` badge** — it is not withheld. Rejecting whole answers on one weak claim loses good information, so the badge is the trade-off: read it, and treat an unverified claim as unconfirmed.
 
 </details>
 
