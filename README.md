@@ -114,9 +114,21 @@ The core engine (hybrid retrieval + citation verification + workspace profiles) 
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=aieng-abdullah%2Fproduction-rag-assistant&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=aieng-abdullah/production-rag-assistant&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=aieng-abdullah/production-rag-assistant&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=aieng-abdullah/production-rag-assistant&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## Features
 
-- **Citation-verified answers** — per-sentence `[SOURCE N]` validation, page-level provenance
+- **Citation-verified answers** — every claim carries a verbatim quote, checked against the chunk it cites, page-level provenance
 - **Hybrid retrieval** — BM25 + vector, fused with RRF, reranked by cross-encoder
 - **Graceful abstention** — "not enough information" instead of confident guessing
 - **Google login** — OAuth; guest mode without an account
@@ -178,7 +190,7 @@ LLM Provider Chain (retry + exponential backoff + failover)
      ├── Anthropic (Claude) — optional, user-provided key
      └── OpenAI (GPT-4o) — optional, user-provided key
      ↓
-Pydantic Citation Validator — per-sentence [SOURCE N] check
+Pydantic Citation Validator — every claim must cite; quotes checked against the chunk
      ↓
 Final Response with page-level citations
 ```
