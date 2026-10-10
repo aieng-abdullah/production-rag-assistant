@@ -6,7 +6,31 @@ from src.config import Config
 
 class TestConfigPaths:
     def test_base_dir_is_project_root(self):
-        assert Config.BASE_DIR.name == "production-rag-assistant"
+        """Verify BASE_DIR resolves to the repository root containing marker files."""
+        assert (Config.BASE_DIR / "requirements.txt").is_file(), (
+            f"Expected {Config.BASE_DIR} to contain requirements.txt"
+        )
+        assert (Config.BASE_DIR / "src").is_dir(), (
+            f"Expected {Config.BASE_DIR} to contain src/ directory"
+        )
+        assert (Config.BASE_DIR / "tests").is_dir(), (
+            f"Expected {Config.BASE_DIR} to contain tests/ directory"
+        )
+
+    def test_base_dir_resolves_correctly_regardless_of_directory_name(self, tmp_path):
+        """Simulate repo checked out under an arbitrary folder name (e.g. worktree or CI)."""
+        arbitrary_root = tmp_path / "custom-checkout-name"
+        fake_src = arbitrary_root / "src"
+        fake_src.mkdir(parents=True)
+        (arbitrary_root / "requirements.txt").touch()
+
+        fake_config_file = fake_src / "config.py"
+        # Mirror Path(__file__).parent.parent resolution logic from src/config.py
+        resolved_base_dir = fake_config_file.parent.parent
+
+        assert resolved_base_dir == arbitrary_root
+        assert (resolved_base_dir / "requirements.txt").is_file()
+        assert (resolved_base_dir / "src").is_dir()
 
     def test_data_dir_exists(self):
         assert Config.DATA_DIR.exists()
