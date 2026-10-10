@@ -6,11 +6,22 @@ from src.config import Config
 
 class TestConfigPaths:
     def test_base_dir_is_project_root(self):
-        assert Config.BASE_DIR.name == "production-rag-assistant"
+        # Check the property that BASE_DIR resolves to the project root
+        # (contains the standard project marker files), not a hardcoded name.
+        # This passes for any checkout directory name (worktrees, CI, etc.).
+        assert (Config.BASE_DIR / "requirements.txt").is_file(), (
+            f"BASE_DIR {Config.BASE_DIR} does not contain requirements.txt; "
+            "it may not be the project root"
+        )
+        assert (Config.BASE_DIR / "src").is_dir(), (
+            f"BASE_DIR {Config.BASE_DIR} does not contain src/ directory"
+        )
+        assert (Config.BASE_DIR / "pytest.ini").is_file(), (
+            f"BASE_DIR {Config.BASE_DIR} does not contain pytest.ini"
+        )
 
     def test_data_dir_exists(self):
         assert Config.DATA_DIR.exists()
-
 
 
 class TestConfigEnvVars:
