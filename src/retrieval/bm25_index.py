@@ -1,16 +1,62 @@
-"""BM25 search using pure LangChain BM25Retriever."""
+"""BM25 search backed by rank_bm25 (Okapi BM25)."""
 
-from typing import List, Dict
+from collections.abc import Callable
 
-from langchain_community.retrievers import BM25Retriever
+import numpy as np
 from langchain_core.documents import Document
 from loguru import logger
+from rank_bm25 import BM25Okapi
 
 
-def _chunks_to_documents(chunks: List[Dict]) -> List[Document]:
+def _default_preprocess(text: str) -> list[str]:
+    """Whitespace tokenisation (same default the LangChain retriever used)."""
+    return text.split()
+
+
+class BM25Retriever:
+    """Minimal Okapi BM25 retriever over LangChain Documents.
+
+    Drop-in for the slice of the LangChain community BM25Retriever
+    this app used: `from_documents(...)`, a mutable `k`, and `invoke(query)`.
+    Ranking is identical: BM25Okapi scores, top-k by descending score.
+    """
+
+    def __init__(
+        self,
+        vectorizer: BM25Okapi,
+        docs: list[Document],
+        k: int = 4,
+        preprocess_func: Callable[[str], list[str]] = _default_preprocess,
+    ) -> None:
+        self.vectorizer = vectorizer
+        self.docs = docs
+        self.k = k
+        self.preprocess_func = preprocess_func
+
+    @classmethod
+    def from_documents(
+        cls,
+        documents: list[Document],
+        *,
+        k: int = 4,
+        bm25_params: dict | None = None,
+        preprocess_func: Callable[[str], list[str]] = _default_preprocess,
+    ) -> "BM25Retriever":
+        docs = list(documents)
+        tokenised = [preprocess_func(doc.page_content) for doc in docs]
+        vectorizer = BM25Okapi(tokenised, **(bm25_params or {}))
+        return cls(vectorizer, docs, k=k, preprocess_func=preprocess_func)
+
+    def invoke(self, query: str) -> list[Document]:
+        scores = self.vectorizer.get_scores(self.preprocess_func(query))
+        top = np.argsort(scores)[::-1][: self.k]
+        return [self.docs[i] for i in top]
+
+
+def _chunks_to_documents(chunks: list[dict]) -> list[Document]:
     """Convert chunk dictionaries to LangChain Documents.
 
-    Full metadata passes through (provenance keys included — PR-4b-iv);
+    Full metadata passes through (provenance keys included -- PR-4b-iv);
     `source: bm25` marks the retrieval channel."""
     return [
         Document(
@@ -31,7 +77,7 @@ def _chunks_to_documents(chunks: List[Dict]) -> List[Document]:
     ]
 
 
-def _documents_to_chunks(documents: List[Document]) -> List[Dict]:
+def _documents_to_chunks(documents: list[Document]) -> list[dict]:
     """Convert LangChain documents back to chunk dictionaries."""
     return [
         {
@@ -51,9 +97,9 @@ def _documents_to_chunks(documents: List[Document]) -> List[Dict]:
     ]
 
 
-def build_bm25_index(chunks: List[Dict]) -> BM25Retriever:
+def build_bm25_index(chunks: list[dict]) -> BM25Retriever:
     """
-    Build a BM25 index from chunks using LangChain BM25Retriever.
+    Build a BM25 index from chunks using rank_bm25.
 
     """
     documents = _chunks_to_documents(chunks)
@@ -62,16 +108,16 @@ def build_bm25_index(chunks: List[Dict]) -> BM25Retriever:
     return retriever
 
 
-def bm25_search(bm25: BM25Retriever, query: str, top_k: int) -> List[Dict]:
+def bm25_search(bm25: BM25Retriever, query: str, top_k: int) -> list[dict]:
     """
-    Search the BM25 index using LangChain retriever.
+    Search the BM25 index using the rank_bm25-backed retriever.
 
     """
     try:
         # Configure k for this search
         bm25.k = top_k
 
-        # Search using LangChain retriever
+        # Search using our retriever
         documents = bm25.invoke(query)
 
         # Convert back to chunk format
@@ -84,7 +130,7 @@ def bm25_search(bm25: BM25Retriever, query: str, top_k: int) -> List[Dict]:
         raise RuntimeError(f"Error while ranking documents: {e}")
 
 
-def get_bm25_retriever(chunks: List[Dict], top_k: int = 20) -> BM25Retriever:
+def get_bm25_retriever(chunks: list[dict], top_k: int = 20) -> BM25Retriever:
     """Get a BM25Retriever for use in chains.
 
     """

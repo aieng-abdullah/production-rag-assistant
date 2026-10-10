@@ -3,7 +3,7 @@ streamlit>=1.58.0
 
 # Vector DB & Search
 langchain-community>=0.3.0,<0.4.2  # 0.4.2 removed chat_models.vertexai, which ragas imports transitively
-rank-bm25>=0.2.2  # Required by LangChain BM25
+rank-bm25>=0.2.2  # Okapi BM25; direct dep, replaces langchain-community BM25Retriever (#149)
 
 # LLM & Embeddings
 groq>=0.9.0
