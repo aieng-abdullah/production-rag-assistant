@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from src.config import Config
-from src.ingestion import embedder
+from src.ingestion import embed_cache, embedder
 from src.ingestion.embedder import _get_model, embed_chunks, embed_query
 
 
@@ -32,10 +32,15 @@ def fake_voyage_key(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_pacing():
-    """Pacing is process-wide, so clear the window between tests."""
+    """Pacing and the embedding cache are both process-wide, so clear
+    them between tests — otherwise one test's cached vector answers
+    another's query and the assertion silently passes for the wrong
+    reason."""
     embedder._reset_pacing()
+    embed_cache.invalidate_all()
     yield
     embedder._reset_pacing()
+    embed_cache.invalidate_all()
 
 
 def test_embed_query_is_paced():
@@ -45,6 +50,9 @@ def test_embed_query_is_paced():
     user query) and the eval path. With no pacing it fired requests
     back-to-back against a 3 RPM account and 429'd, which is what made
     `eval/verify_eval.py` unrunnable.
+
+    Distinct texts each call: an identical query would now be served from
+    the embedding cache and never reach the HTTP layer at all.
     """
     embedder.Config.VOYAGE_EMBED_PACE_S = 21
     embedder._reset_pacing()
@@ -52,12 +60,46 @@ def test_embed_query_is_paced():
     with patch("src.ingestion.embedder.httpx.post") as mock_post:
         mock_post.return_value = _response([[3.0, 4.0]])
         with patch("src.ingestion.embedder.time.sleep") as mock_sleep:
-            for _ in range(3):
-                embedder.embed_query("q")
+            for i in range(3):
+                embedder.embed_query(f"query {i}")
 
     assert mock_post.call_count == 3
     # First call opens the window; calls two and three must wait.
     assert mock_sleep.call_count == 2
+
+
+def test_identical_query_embeddings_are_cached():
+    """A query embedding is a pure function of (model, type, text).
+
+    Same question twice costs one Voyage call, which is what takes the
+    ~13 min of pacing out of a re-run of `eval/retrieval_precision.py`.
+    """
+    embedder.Config.VOYAGE_EMBED_PACE_S = 0
+    embedder._reset_pacing()
+    embed_cache.invalidate_all()
+
+    with patch("src.ingestion.embedder.httpx.post") as mock_post:
+        mock_post.return_value = _response([[3.0, 4.0]])
+        first = embedder.embed_query("same question")
+        second = embedder.embed_query("same question")
+
+    assert mock_post.call_count == 1
+    assert first == second
+    assert embed_cache.snapshot()["hits"] == 1
+
+
+def test_different_queries_are_not_served_from_cache():
+    embedder.Config.VOYAGE_EMBED_PACE_S = 0
+    embedder._reset_pacing()
+    embed_cache.invalidate_all()
+
+    with patch("src.ingestion.embedder.httpx.post") as mock_post:
+        mock_post.return_value = _response([[3.0, 4.0]])
+        embedder.embed_query("question one")
+        embedder.embed_query("question two")
+
+    assert mock_post.call_count == 2
+    assert embed_cache.snapshot()["misses"] == 2
 
 
 def test_pacing_is_a_noop_when_disabled():
@@ -68,8 +110,8 @@ def test_pacing_is_a_noop_when_disabled():
     with patch("src.ingestion.embedder.httpx.post") as mock_post:
         mock_post.return_value = _response([[3.0, 4.0]])
         with patch("src.ingestion.embedder.time.sleep") as mock_sleep:
-            for _ in range(5):
-                embedder.embed_query("q")
+            for i in range(5):
+                embedder.embed_query(f"query {i}")
 
     assert mock_post.call_count == 5
     mock_sleep.assert_not_called()

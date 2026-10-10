@@ -52,6 +52,17 @@ class Config:
     VOYAGE_EMBED_BATCH_SIZE = int(os.getenv("VOYAGE_EMBED_BATCH_SIZE", "64"))
     # Minimum spacing between batched embedding calls during ingestion.
     VOYAGE_EMBED_PACE_S = float(os.getenv("VOYAGE_EMBED_PACE_S", "21"))
+    # Token budget, enforced as a rolling 60s window per model by
+    # src/voyage_pacer.py rather than as a fixed interval between calls:
+    # a rerank costs ~130x a query embedding, so one interval is too slow
+    # for the cheap call and too loose for the expensive one.
+    VOYAGE_TPM_LIMIT = int(os.getenv("VOYAGE_TPM_LIMIT", "10000"))
+    VOYAGE_RPM_LIMIT = int(os.getenv("VOYAGE_RPM_LIMIT", "3"))
+    # Ceiling on a single pacing sleep, so one fat rerank cannot stall a
+    # query for a minute without the log saying so.
+    VOYAGE_MAX_WAIT_S = float(os.getenv("VOYAGE_MAX_WAIT_S", "45"))
+    # TTL for the query-embedding cache (src/ingestion/embed_cache.py).
+    VOYAGE_CACHE_TTL_S = int(os.getenv("VOYAGE_CACHE_TTL_S", "3600"))
     EMBED_TIMEOUT_S = float(os.getenv("EMBED_TIMEOUT_S", "30"))
     RERANK_TIMEOUT_S = float(os.getenv("RERANK_TIMEOUT_S", "10"))
 

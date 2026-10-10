@@ -31,6 +31,13 @@ from tenacity import (
 )
 
 from src.config import Config
+from src.ingestion.embed_cache import cached_embed_query
+from src.voyage_pacer import (
+    EMBEDDINGS,
+    estimate_tokens,
+    observe,
+    reserve as pacer_reserve,
+)
 from src.voyage_usage import record as record_usage
 
 # Voyage trial accounts (no payment method): 3 RPM / 10K TPM. Waits below
@@ -59,15 +66,20 @@ def _reset_pacing() -> None:
         _last_call = 0.0
 
 
-def _pace() -> None:
-    """Block until `VOYAGE_EMBED_PACE_S` has passed since the last call.
+def _pace(estimated_tokens: int) -> None:
+    """Block until `estimated_tokens` fit in the Voyage embedding budget.
 
-    Lives here rather than in the batching loops because pacing used to
-    sit only in ``embed_chunks`` — the ingestion path. ``embed_query`` and
-    ``embed_documents`` had none, so every live retrieval embedded
-    unthrottled against a 3 RPM account and 429'd. One gate at the HTTP
-    boundary covers all three paths and any future caller.
+    Delegates to `src.voyage_pacer`, which paces by token count rather
+    than by call count: a query embedding costs ~10 tokens and a 64-input
+    batch costs ~3,000, so any single fixed interval is simultaneously
+    too slow for one and too loose for the other. Rerank keeps its own
+    window — Voyage counts limits per model, so coupling them would halve
+    throughput for nothing.
+
+    `VOYAGE_EMBED_PACE_S` is kept as an additional floor for callers that
+    want a guaranteed minimum gap regardless of token accounting.
     """
+    pacer_reserve(estimated_tokens, EMBEDDINGS)
     pace_s = Config.VOYAGE_EMBED_PACE_S
     if not pace_s:
         return
@@ -105,7 +117,8 @@ def _post_embeddings(texts: List[str], input_type: str) -> List[List[float]]:
             "fallback). Add it to .env."
         )
 
-    _pace()
+    estimated = sum(estimate_tokens(text) for text in texts)
+    _pace(estimated)
 
     response = httpx.post(
         f"{Config.VOYAGE_BASE_URL}/embeddings",
@@ -128,7 +141,9 @@ def _post_embeddings(texts: List[str], input_type: str) -> List[List[float]]:
 
     data = response.json()
     usage = data.get("usage") or {}
-    record_usage("embeddings", int(usage.get("total_tokens") or 0))
+    actual = int(usage.get("total_tokens") or 0)
+    record_usage("embeddings", actual)
+    observe(actual, estimated, EMBEDDINGS)
 
     items = sorted(data.get("data") or [], key=lambda item: item["index"])
     if len(items) != len(texts):
@@ -183,7 +198,7 @@ def embed_query(text: str) -> List[float]:
     Returns:
         List of float embedding values.
     """
-    return _get_model().embed_query(text)
+    return cached_embed_query(_get_model().embed_query, text)
 
 
 def embed_chunks(chunks: List[Dict], batch_size: int | None = None) -> List[Dict]:

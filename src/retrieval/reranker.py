@@ -21,18 +21,21 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_random_exponential,
 )
 
 from src.config import Config
+from src.voyage_pacer import RERANK, estimate_documents_tokens, observe, reserve
 from src.voyage_usage import record as record_usage
 
 
-# Voyage trial accounts (no payment method): 3 RPM. Waits below outlast one
-# rate-limit window (20s) without hammering the API.
+# Voyage trial accounts (no payment method): 3 RPM / 10K TPM. Waits below
+# outlast one rate-limit window without hammering the API. Randomised so a
+# burst of concurrent retries does not re-synchronise into the next window
+# and collide again.
 @retry(
     stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=2, min=5, max=45),
+    wait=wait_random_exponential(multiplier=2, min=5, max=45),
     retry=retry_if_exception_type(httpx.HTTPError),
     before=before_log(logger, logging.WARNING),
     reraise=True,
@@ -49,6 +52,13 @@ def _post_rerank(query: str, documents: list[str]) -> list[dict]:
             "VOYAGE_API_KEY is not set — rerank is API-only (no local "
             "fallback). Add it to .env."
         )
+
+    # A rerank sends every fused candidate, so it costs ~130x a query
+    # embedding — and it previously had no gate at all, since the pacing
+    # lived only in the embedding path. Reserving against its own window
+    # lets the reranker self-pace without starving query embeddings.
+    estimated = estimate_documents_tokens(documents)
+    reserve(estimated, RERANK)
 
     response = httpx.post(
         f"{Config.VOYAGE_BASE_URL}/rerank",
@@ -71,7 +81,9 @@ def _post_rerank(query: str, documents: list[str]) -> list[dict]:
 
     data = response.json()
     usage = data.get("usage") or {}
-    record_usage("rerank", int(usage.get("total_tokens") or 0))
+    actual = int(usage.get("total_tokens") or 0)
+    record_usage("rerank", actual)
+    observe(actual, estimated, RERANK)
     # Voyage /rerank responds with `data` ([{"index", "relevance_score"}]).
     return data.get("data") or []
 
