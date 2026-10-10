@@ -105,7 +105,8 @@ tests/                        # Pytest suite (backend)
 
 ## Continuous Integration Contract
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
+GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`
+**and on every push to `main`**:
 
 1. **lint** — `pip install ruff==0.15.10` → `ruff check src tests eval alembic` + `cd frontend && npm run lint`
 2. **test** — `pip install -r requirements.txt` → `pytest tests/ -v -m "not slow" --cov-fail-under=0` + `cd frontend && npm run build`
@@ -113,9 +114,26 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on PRs targeting `main`:
 CI runs fast tests only (slow embedder tests marked `@pytest.mark.slow` skipped).
 No coverage gate on PRs — keep ≥70% locally with the command above before pushing.
 
+The post-merge push run is not redundant with the PR run: the PR run covers
+the head branch, and a merge can land something it did not cover. On 2026-10-10
+three PRs merged red on a pre-existing dependency failure that #131 then fixed —
+and nothing re-checked them, because no post-merge run existed. Keep the trigger.
+
+### Branch protection on `main` (live as of 2026-10-10)
+
+- Required status checks: **`lint` and `test`**, `strict: true` (branch must be
+  up to date with `main` before merging).
+- Enforced on admins. No force-push, no branch deletion.
+- **No required approving review.** This repo has exactly one collaborator with
+  push access, so requiring one review would deadlock every merge. If a second
+  maintainer is added, raise `required_approving_review_count` then.
+
+Because `enforce_admins` is on, a red check blocks your own merge — that is the
+point, but it means a stale failure cannot be merged past "just this once".
+
 ## Version-Control Hygiene & Branch Discipline
 
-- **Never push directly to `main`** — branch protection enforces this. Every change goes through a PR branch.
+- **Never push directly to `main`** — branch protection enforces this (required checks `lint` + `test`, `enforce_admins` on). Every change goes through a PR branch.
 - Branch names: `type/short-slug` — `feat/`, `fix/`, `chore/`, `ci/`, `docs/`, `refactor/`, `test/`, `security/`.
 - Commits: Conventional Commits — `type: subject`, lowercase imperative, ≤50 chars.
 - One concern per branch. No mixed refactor + feature work.
