@@ -27,9 +27,16 @@ import os
 #
 # GROQ only, deliberately. tests/test_config_validate.py asserts that
 # clearing GROQ alone makes validate() raise, and that only holds while
-# ANTHROPIC_API_KEY and OPENAI_API_KEY stay empty. setdefault so a real key
-# from .env still wins.
-os.environ.setdefault("GROQ_API_KEY", "test-key-not-used")
+# ANTHROPIC_API_KEY and OPENAI_API_KEY stay empty.
+#
+# Assignment, not setdefault: ci.yml passes the key through as
+# `GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}`, and on a fork that secret
+# resolves to an *empty string* rather than being absent. os.environ.setdefault
+# only fills a missing key, so it left `GROQ_API_KEY=""` in place and the
+# lifespan still raised. Testing for truthiness covers both cases: unset,
+# and set-but-empty.
+if not os.environ.get("GROQ_API_KEY"):
+    os.environ["GROQ_API_KEY"] = "test-key-not-used"
 
 import pytest  # noqa: E402  (must follow the env default above)
 
