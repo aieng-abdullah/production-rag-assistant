@@ -3,6 +3,20 @@ name: Tests
 on:
   pull_request:
     branches: [main]
+  # Re-verify after merge. Without this, main is never tested: the
+  # pull_request run covers the head branch, and if a merge lands
+  # anything the head run did not cover, nothing catches it. That is how
+  # three red PRs (#128, #129, #130) merged on 2026-10-10 — they were
+  # red on a pre-existing dependency failure that #131 then fixed, and
+  # no post-merge run ever re-checked them.
+  push:
+    branches: [main]
+
+# One run per ref. A new push supersedes the previous one instead of
+# queueing behind it.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
