@@ -10,10 +10,31 @@ specifically exercise pacing set their own limits — and any that need to
 observe a real sleep patch `sleep` and assert on the call.
 """
 
-import pytest
+import os
 
-from src import voyage_pacer
-from src.config import Config
+# The suite must pass with no secrets configured. GitHub does not expose
+# repository secrets to fork pull requests, so this test:
+#
+#   test_api_documents.py::test_startup_marks_stale_processing_as_failed
+#
+# is the only one that enters the FastAPI lifespan, and the only one that
+# calls Config.validate(). Without this it raised "No LLM provider API key
+# found" on every fork PR and blocked the contributor, while passing
+# locally purely because a developer's .env happened to be present.
+#
+# `Config` reads env at import time, so the default has to be set before the
+# `src.config` import below — not in a fixture, which runs too late.
+#
+# GROQ only, deliberately. tests/test_config_validate.py asserts that
+# clearing GROQ alone makes validate() raise, and that only holds while
+# ANTHROPIC_API_KEY and OPENAI_API_KEY stay empty. setdefault so a real key
+# from .env still wins.
+os.environ.setdefault("GROQ_API_KEY", "test-key-not-used")
+
+import pytest  # noqa: E402  (must follow the env default above)
+
+from src import voyage_pacer  # noqa: E402
+from src.config import Config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
