@@ -13,6 +13,7 @@ from tenacity import (
 )
 
 from src.retrieval.pipeline import retrieval
+from src.generation.context_assembly import assemble_context, is_widening_enabled
 from src.generation.Citation_system import build_citation_prompt, build_source, CitedAnswer, Source
 from src.generation.schema import (
     AnswerVerificationError,
@@ -73,6 +74,23 @@ def _merge_usage(
     if not second:
         return first
     return {key: first.get(key, 0) + second.get(key, 0) for key in set(first) | set(second)}
+
+
+def _corpus_chunks(tenant_id: str, workspace: str | None) -> list[dict] | None:
+    """Full corpus for context widening, or None when widening is off.
+
+    Skipped entirely unless a widening width is configured, so the seam
+    costs nothing by default. When it *is* configured the read is cached
+    per (tenant, workspace) and invalidated alongside the BM25 index —
+    otherwise every user query would pull the whole corpus.
+    """
+    if not is_widening_enabled():
+        return None
+    # Imported lazily: corpus_cache pulls in qdrant_client, which imports
+    # the embedder, which imports back into this module.
+    from src.services.corpus_cache import get_chunks
+
+    return get_chunks(tenant_id=tenant_id, workspace=workspace)
 
 
 def _collect_problems(raw: str, chunks: list[dict]) -> list[str]:
@@ -273,8 +291,15 @@ def _run_pipeline(
 ) -> CitedAnswer:
     """Core RAG pipeline: retrieve → build prompt → call LLM → validate citations."""
     search_query = _search_query(query, history, tenant_id)
-    top_chunks = retrieval(search_query, bm25_index, tenant_id=tenant_id, workspace=workspace)
-    logger.debug(f"Retrieved {len(top_chunks)} top chunks")
+    retrieved = retrieval(search_query, bm25_index, tenant_id=tenant_id, workspace=workspace)
+    logger.debug(f"Retrieved {len(retrieved)} top chunks")
+
+    # Single choke point: the prompt, quote verification, the entailment
+    # judge and the trace all read `top_chunks` from here. Widening in any
+    # one of them instead would let the judge verify text the user never
+    # saw. No-op unless a context width is configured (#125).
+    top_chunks = assemble_context(retrieved, _corpus_chunks(tenant_id, workspace))
+    logger.debug(f"Assembled answer context from {len(top_chunks)} chunks")
 
     citation_prompt = build_citation_prompt(
         query, top_chunks, workspace=workspace, history=history
@@ -354,15 +379,18 @@ def _generate_traced(
                     ),
                 }),
             ) as retr:
-                top_chunks = retrieval(
+                retrieved = retrieval(
                     search_query,
                     bm25_index,
                     lf_retrieval_parent=retr,
                     tenant_id=tenant_id,
                     workspace=workspace,
                 )
-                logger.debug(f"Retrieved {len(top_chunks)} top chunks")
-                retr.update(output=_safe({"chunks_retrieved": len(top_chunks)}))
+                logger.debug(f"Retrieved {len(retrieved)} top chunks")
+                retr.update(output=_safe({"chunks_retrieved": len(retrieved)}))
+                top_chunks = assemble_context(
+                    retrieved, _corpus_chunks(tenant_id, workspace)
+                )
 
             # --- Prompt build ---
             with root.start_as_current_observation(

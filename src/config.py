@@ -77,6 +77,17 @@ class Config:
     TOP_K_RERANK = 8
     RRF_K = 60
 
+    # --- Answer-time context assembly ---
+    # 0 = disabled. Section widening and neighbour widening are off until
+    # the retrieval gate proves they help (#111 / #127); enabling them
+    # changes what the prompt, the quote verifier and the entailment judge
+    # all see, so they move together through context_assembly.py.
+    CONTEXT_SECTION_WIDTH = int(os.getenv("CONTEXT_SECTION_WIDTH", "0"))
+    CONTEXT_NEIGHBOR_WINDOW = int(os.getenv("CONTEXT_NEIGHBOR_WINDOW", "0"))
+    # Hard ceiling on assembled context, in characters. Exceeding it logs
+    # and drops the lowest-ranked chunks deterministically — never raises.
+    CONTEXT_CHAR_BUDGET = int(os.getenv("CONTEXT_CHAR_BUDGET", "24000"))
+
     # --- Quotas (PLAN PR-3b, env-tunable) ---
     DAILY_QUERY_LIMIT = int(os.getenv("DAILY_QUERY_LIMIT", "20"))
     DOCUMENT_LIMIT = int(os.getenv("DOCUMENT_LIMIT", "5"))

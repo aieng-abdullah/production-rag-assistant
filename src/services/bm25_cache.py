@@ -11,6 +11,7 @@ from loguru import logger
 
 from src.db.qdrant_client import load_all_chunks
 from src.retrieval.bm25_index import build_bm25_index
+from src.services.corpus_cache import clear_chunks, invalidate_chunks
 
 __all__ = ["get_bm25", "invalidate", "clear_all"]
 
@@ -38,12 +39,20 @@ def get_bm25(tenant_id: str, workspace: str | None = None):
 
 
 def invalidate(tenant_id: str) -> None:
-    """Drop every workspace index of one tenant — call after ingest or delete."""
+    """Drop every workspace index of one tenant — call after ingest or delete.
+
+    Also drops the corpus chunk list: both are keyed on the same
+    `(tenant_id, workspace)` pair and both derive from `load_all_chunks`,
+    so they must go stale together or widening would search chunks that
+    no longer match the index.
+    """
     for key in [k for k in _cache if k[0] == tenant_id]:
         _cache.pop(key, None)
     logger.debug("BM25 invalidated tenant={}", tenant_id)
+    invalidate_chunks(tenant_id)
 
 
 def clear_all() -> None:
     """Test/reset hook."""
     _cache.clear()
+    clear_chunks()
