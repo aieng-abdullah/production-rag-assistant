@@ -7,7 +7,9 @@
 
 ### Citation-enforced RAG research assistant for legal & academic
 
-[![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented%20Generation-brightgreen)](#how-we-solve-it)
+GroundedAI (repo: production-rag-assistant)
+
+[![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented%20Generation-brightgreen)](#how-it-works)
 [![Workspaces](https://img.shields.io/badge/workspaces-Legal%20%7C%20Academic-blue)](#workspaces)
 [![CI](https://github.com/aieng-abdullah/production-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/aieng-abdullah/production-rag-assistant/actions)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
@@ -41,11 +43,11 @@ AI assistants answer questions about your documents — and then **guess**.
 - **Manual reading doesn't scale.** Researchers skim dozens of PDFs. Lawyers grep through acts and case law. Students re-read the same chapter hoping to find the one passage that matters.
 - **Wrong citations carry real risk.** Academic integrity violations. Misquoted statutes. Bad advice built on a paragraph that never said that.
 
-**ChatGPT guesses. We verify — every claim, against the source, before you see it.**
+**ChatGPT guesses. GroundedAI verifies — every claim, against the source, before you see it.**
 
 ---
 
-## How we solve it
+## How it works
 
 **Retrieval-Augmented Generation (RAG)** with a citation validation gate on top: retrieve only your document's passages, ground the answer on them, then reject any sentence that isn't cited.
 
@@ -68,7 +70,7 @@ Validation is a **code-level gate**, not a prompt instruction. The model cannot 
 | You need | GroundedAI |
 |----------|-----------|
 | **Answers in your domain** | Two workspaces on one engine: **legal** reports what statutes say (no legal advice, strict abstain); **academic** answers from your papers with provenance |
-| **Trustworthy answers** | Faithfulness **1.00** on golden set — every claim grounded in your corpus, or the system says so |
+| **Trustworthy answers** | Faithfulness **1.00** (n=5) on golden set — every claim grounded in your corpus, or the system says so |
 | **Verifiable citations** | Per-sentence `[SOURCE N]` + page numbers — click through to the source text |
 | **Honesty by default** | Abstains instead of fabricating when your corpus lacks the answer |
 | **Choice of models** | Groq (free) → Anthropic → OpenAI failover; add your own key in the sidebar |
@@ -82,7 +84,7 @@ Validation is a **code-level gate**, not a prompt instruction. The model cannot 
 |---|---|---|
 | **Citation enforcement** | Prompt says "cite sources" | Pydantic requires a citation on every claim; quote containment checked against the cited chunk |
 | **Retrieval** | Vector-only | BM25 ∥ vector → RRF → cross-encoder rerank |
-| **Latency forensics** | Guess at slowness | Langfuse traces (n=141): reranker is the bottleneck — measured, not guessed |
+| **Latency forensics** | Guess at slowness | Langfuse traces (n=141, local cross-encoder, 2026-06): reranker is the bottleneck — measured, not guessed |
 | **Provider resilience** | Single LLM, dies on rate limit | Groq → Anthropic → OpenAI failover with retry + exponential backoff |
 
 ---
@@ -160,7 +162,7 @@ Hybrid Retrieval-Augmented Generation stack. How each piece solves part of the p
 | UI | **React SPA + FastAPI** | Modern frontend, scoped API, Render Docker + static deploy |
 | Observability | **Langfuse (opt-in/sampled)** | Production-safe tracing; off by default, sampled when enabled |
 | Evaluation | **Citation gates + Ragas** | Quote-containment, recall and abstention gates on an 8-item adversarial set; Ragas metrics over the 29-item corpus when keys are funded |
-| CI | **GitHub Actions** | Lint + 291 tests on every PR |
+| CI | **GitHub Actions** | ruff + fast tests on every PR and push to main (slow embedder tests skipped) |
 
 ### Pipeline
 
@@ -348,6 +350,8 @@ See [How I found the bottleneck](#how-i-found-the-bottleneck).
 
 Every request traced end-to-end with Langfuse. **141 complete traces** collected across real usage.
 
+Measured 2026-06 against the then-current local cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, CPU, in-process). The pipeline now reranks through the Voyage `voyage-rerank-3-lite` API (landed 2026-10-07, `d4a8258`). These spans therefore exclude Voyage API round-trip and trial rate-pacing.
+
 #### Latency profile (n=141)
 
 | Metric | Latency | What it means |
@@ -356,6 +360,8 @@ Every request traced end-to-end with Langfuse. **141 complete traces** collected
 | p90 | 7.32s | 1 in 10 users waits this long |
 | p95 | 11.09s | 1 in 20 users waits this long |
 | p99 | 14.06s | Worst case observed |
+
+n=141 — p99 rests on the top 1–2 requests, so treat it as indicative only, not an SLO. p95 sits on roughly seven.
 
 #### Component breakdown
 
@@ -380,7 +386,7 @@ Data: LLM contributes only **0.57s at median**. Cross-encoder reranker is the ac
 | ChatGroq | 0.57s | 1.19s | 2× |
 | Vector search | 0.03s | 0.22s | 7× |
 
-Groq inference is fast and stable (2× p50→p95). Reranker shows 12× variance because the cross-encoder scores every (query, chunk) pair individually on CPU — no batching.
+Groq inference is fast and stable (2× p50→p95). Rerank shows 12× variance because the local cross-encoder scored every (query, chunk) pair on CPU — measured before the Voyage API reranker landed.
 
 Optimizing the LLM — the intuitive target — would have had near-zero impact. This finding would have been invisible without instrumentation.
 
@@ -412,10 +418,10 @@ Trace spans: `retrieval` · `prompt-build` · `llm-call` · `citation-validation
 | `legal-conflicting-101` scores `partial` | Open | Conflicting-source arbitration in the prompt |
 | Citation gate set is n=8 | Open | Grow `data/verify_eval.json` toward 20–30 cases |
 | Eval gate not wired into CI | Open | Run `verify_eval.py` in CI; block merge on threshold breach |
-| p95 latency 11.09s (CPU rerank) | Accepted for now | Reranker optimization (see bottleneck section) |
+| p95 latency 11.09s (local CPU rerank, 2026-06) | Accepted for now | Reranker optimization (see bottleneck section) |
 | SQLite relational DB on free tier is ephemeral | Open | Move DATABASE_URL to Neon/Postgres |
 
-CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. The citation gate runs locally via `python3 eval/verify_eval.py`; the badge reflects lint + tests, not an eval gate.
+CI runs `ruff check` plus fast unit tests (slow embedder tests skipped) on every PR and on pushes to main. The coverage gate (≥70%) is enforced locally (AGENTS.md), not on PRs. The citation gate runs locally via `python3 eval/verify_eval.py`; the badge reflects lint + tests, not an eval gate.
 
 ---
 
@@ -427,7 +433,7 @@ Retrospective if rebuilding with what I know now:
 2. **Baseline before optimization.** Ship vector-only baseline, score it, then layer hybrid + rerank with measured deltas — not all at once.
 3. **Fix precision before adding features.** Context precision 0.375 was known; section-aware metadata filter should precede any new capability.
 4. **Wire the CI gate on day one.** Claiming an eval gate that doesn't block merges was a documentation-drift bug — this rewrite corrects the claim; next step is making it true.
-5. **Smaller reranker, or GPU, earlier.** Reranker dominates p95 variance (12×) — obvious first target when faithfulness is already 1.00.
+5. **Reranker was the lever.** It dominated p95 variance (12×) on the local CPU model — today's options are paid Voyage rerank or a smaller model, not a GPU. Target it before anything else while faithfulness is already 1.00.
 6. **Character vs token wording.** Chunk size is characters (`RecursiveCharacterTextSplitter`), not tokens — earlier README said tokens. Precision in claims matters.
 
 ---
@@ -499,15 +505,15 @@ Writes `results.json` (metric scores, thresholds, per-sample outputs).
 pytest tests/ -v -m "not slow" --cov=src --cov-report=term-missing --cov-fail-under=70
 ```
 
-CI runs the same command on every push/PR.
+CI runs the same tests with the coverage gate disabled (`--cov-fail-under=0`). The ≥70% floor is enforced locally, not on PRs.
 
 ---
 
 ### Performance notes
 
-End-to-end latency: **1.54s p50 → 14.06s p99** across 141 traced requests.
+End-to-end latency: **1.54s p50 → 14.06s p99** across 141 traced requests (n=141 — p99 indicative only).
 
-Cross-encoder reranker accounts for the dominant share of tail latency on CPU (12× p50→p95 variance).
+Cross-encoder reranker accounts for the dominant share of tail latency under the earlier local CPU cross-encoder (12× p50→p95 variance).
 
 Current implementation prioritizes retrieval quality and grounded answers over raw latency.
 
@@ -515,12 +521,7 @@ Current implementation prioritizes retrieval quality and grounded answers over r
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — free to view, run, and study
-locally for personal, academic, or other noncommercial use. You may not
-sell the software or offer it as a paid commercial service. For
-commercial licensing, contact the author.
-
-Required Notice: Copyright (c) 2026 Abdullah
+[MIT](LICENSE) — free to use, modify, and redistribute, including commercially.
 
 ---
 
