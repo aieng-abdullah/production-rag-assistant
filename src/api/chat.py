@@ -62,7 +62,7 @@ def _sanitize_history(turns: list[ChatTurn]) -> list[dict]:
         content = sanitize_untrusted(turn.content)
         if not content.strip():
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"History turn {index} has no usable content",
             )
         cleaned.append({"role": turn.role, "content": content})
@@ -85,7 +85,7 @@ def chat(body: ChatRequest, user_id: int = Depends(require_user)) -> dict:
     query = sanitize_untrusted(body.query)
     if not query.strip():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Query has no usable content",
         )
     history = _sanitize_history(body.history)
